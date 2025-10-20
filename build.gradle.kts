@@ -12,8 +12,8 @@ buildscript {
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
-        classpath("com.github.recloudstream:gradle:0.1.0")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0")
+        classpath("com.github.recloudstream:gradle:master-SNAPSHOT")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.10")
     }
 }
 
@@ -42,11 +42,11 @@ subprojects {
     }
 
     android {
-        namespace = project.name
-        compileSdkVersion(35)
+        namespace = "com.zephyra77"
 
         defaultConfig {
             minSdk = 21
+            compileSdkVersion(35)
             targetSdk = 35
         }
 
@@ -57,7 +57,7 @@ subprojects {
 
         tasks.withType<KotlinJvmCompile> {
             compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_17)
+                jvmTarget.set(JvmTarget.JVM_1_8)
                 freeCompilerArgs.addAll(
                     "-Xno-call-assertions",
                     "-Xno-param-assertions",
@@ -68,24 +68,25 @@ subprojects {
     }
 
     dependencies {
-        val implementation by configurations
         val cloudstream by configurations
+        val implementation by configurations
 
-        cloudstream("com.lagradost:cloudstream3:0.1.0")
-        implementation("com.lagradost:nicehttp:0.5.0")
+        cloudstream("com.lagradost:cloudstream3:pre-release")
 
         implementation(kotlin("stdlib"))
-        implementation("org.jsoup:jsoup:1.19.1")
+        implementation("com.github.Blatzar:NiceHttp:0.4.11")
+        implementation("org.jsoup:jsoup:1.18.3")
         implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.16.0")
         implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
-        implementation("org.mozilla:rhino:1.8.0")
+        implementation("com.faendir.rhino:rhino-android:1.6.0")
         implementation("me.xdrop:fuzzywuzzy:1.4.0")
         implementation("com.google.code.gson:gson:2.11.0")
-        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
         implementation("app.cash.quickjs:quickjs-android:0.9.2")
-        implementation("com.github.vidstige:jadb:v1.2.1")
-        implementation("org.bouncycastle:bcpkix-jdk15on:1.70")
+        implementation("com.squareup.okhttp3:okhttp:4.12.0")
+        implementation("androidx.core:core-ktx:1.16.0")
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
     }
 }
 
