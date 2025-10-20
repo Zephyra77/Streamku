@@ -142,76 +142,49 @@ class Nunadrama : MainAPI() {
     }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val document = app.get(data).document
-        val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    val document = getRequest(data).document
+    val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
 
-        if (id.isNullOrEmpty()) {
-            document.select("ul.muvipro-player-tabs li a").amap { ele ->
-                val iframe = app.get(fixUrl(ele.attr("href")))
-                    .document
-                    .selectFirst("div.gmr-embed-responsive iframe")
-                    ?.getIframeAttr()
-                    ?.let { httpsify(it) }
-                    ?: return@amap
+    if (id.isNullOrEmpty()) {
+        document.select("ul.muvipro-player-tabs li a").amap { ele ->
+            val iframe = getRequest(fixUrl(ele.attr("href")))
+                .document
+                .selectFirst("div.gmr-embed-responsive iframe")
+                ?.getIframeAttr()
+                ?.let { httpsify(it) }
+                ?: return@amap
 
-                loadExtractor(iframe, "$directUrl/", subtitleCallback, callback)
-            }
-        } else {
-            document.select("div.tab-content-ajax").amap { ele ->
-                val server = app.post(
-                    "$directUrl/wp-admin/admin-ajax.php",
-                    data = mapOf(
-                        "action" to "muvipro_player_content",
-                        "tab" to ele.attr("id"),
-                        "post_id" to "$id"
-                    )
-                ).document
-                    .select("iframe")
-                    .attr("src")
-                    .let { httpsify(it) }
-
-                loadExtractor(server, "$directUrl/", subtitleCallback, callback)
-            }
+            loadExtractor(iframe, "$directUrl/", subtitleCallback, callback)
         }
+    } else {
+        document.select("div.tab-content-ajax").amap { ele ->
+            val server = postRequest(
+                "$directUrl/wp-admin/admin-ajax.php",
+                data = mapOf(
+                    "action" to "muvipro_player_content",
+                    "tab" to ele.attr("id"),
+                    "post_id" to "$id"
+                )
+            ).document
+                .select("iframe")
+                .attr("src")
+                .let { httpsify(it) }
 
-        document.select("ul.gmr-download-list li a").forEach { linkEl ->
-            val downloadUrl = linkEl.attr("href")
-            if (downloadUrl.isNotBlank()) {
-                loadExtractor(downloadUrl, data, subtitleCallback, callback)
-            }
-        }
-
-        return true
-    }
-
-    private fun Element.toSearchResult(): SearchResponse? {
-        val title = selectFirst("h2.entry-title > a")?.text()?.trim() ?: return null
-        val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = selectFirst("a > img")?.getImageAttr()?.fixImageQuality()
-        val quality = select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
-        return if (quality.isEmpty()) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = poster }
-        } else {
-            newMovieSearchResponse(title, href, TvType.Movie) {
-                this.posterUrl = poster
-                addQuality(quality)
-            }
+            loadExtractor(server, "$directUrl/", subtitleCallback, callback)
         }
     }
 
-    private fun Element.toRecommendResult(): SearchResponse? {
-        val title = selectFirst("a > span.idmuvi-rp-title")?.text()?.trim() ?: return null
-        val href = selectFirst("a")?.attr("href") ?: return null
-        val posterEl = selectFirst("a > img") ?: selectFirst("div.content-thumbnail img")
-        val poster = posterEl?.getImageAttr()?.fixImageQuality()
-        return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = poster
-            this.posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
+    document.select("ul.gmr-download-list li a").forEach { linkEl ->
+        val downloadUrl = linkEl.attr("href")
+        if (downloadUrl.isNotBlank()) {
+            loadExtractor(downloadUrl, data, subtitleCallback, callback)
         }
     }
-}
+
+    return true
+    }
