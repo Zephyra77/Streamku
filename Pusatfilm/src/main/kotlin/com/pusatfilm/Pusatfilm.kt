@@ -1,117 +1,82 @@
 package com.pusatfilm
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.*
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.net.URI
 
 class Pusatfilm : MainAPI() {
-    override var mainUrl = "https://v1.pusatfilm21info.net"
-    override var name = "Pusatfilm"
+    override var mainUrl = "https://pusatfilm21.cam"
+    override var name = "PusatFilm"
     override val hasMainPage = true
     override var lang = "id"
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime, TvType.AsianDrama)
+    override val hasQuickSearch = false
+    override val hasDownloadSupport = true
 
     override val mainPage = mainPageOf(
-        "film-terbaru/page/%d/" to "Film Terbaru",
-        "trending/page/%d/" to "Film Trending",
-        "genre/action/page/%d/" to "Film Action",
-        "series-terbaru/page/%d/" to "Series Terbaru",
-        "drama-korea/page/%d/" to "Drama Korea",
-        "west-series/page/%d/" to "West Series",
-        "drama-china/page/%d/" to "Drama China",
-        "genre/comedy/page/%d/" to "Film Comedy",
-        "genre/horror/page/%d/" to "Film Horror"
+        "/" to "Beranda",
+        "/category/film-barat/" to "Film Barat",
+        "/category/film-asia/" to "Film Asia",
+        "/category/film-indonesia/" to "Film Indonesia",
+        "/category/film-thailand/" to "Film Thailand"
     )
 
-    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val data = request.data.format(page)
-        val document = app.get("$mainUrl/$data").document
-        val home = document.select("article.item").mapNotNull { it.toSearchResult() }
+    private fun Element.toSearchResult(): SearchResponse {
+        val title = this.selectFirst(".title")?.text() ?: "Tanpa Judul"
+        val href = fixUrl(this.selectFirst("a")?.attr("href") ?: return newMovieSearchResponse(title, mainUrl) {})
+        val posterUrl = this.selectFirst("img")?.attr("data-src") ?: this.selectFirst("img")?.attr("src")
+        val isSeries = title.contains("Season", true) || title.contains("Episode", true)
 
-        return newHomePageResponse(
-            list = HomePageList(request.name, home),
-            hasNext = document.select("a.next.page-numbers").isNotEmpty()
-        )
-    }
-
-    private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.selectFirst("h2.entry-title > a")?.text()?.trim() ?: return null
-        val href = fixUrl(this.selectFirst("a")!!.attr("href"))
-        val posterUrl = fixUrlNull(this.selectFirst("a > img")?.attr("src")).fixImageQuality()
-        val quality = this.select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
-        val scoreText = this.select("div.gmr-meta-rating > span[itemprop=ratingValue]").text().toFloatOrNull()
-        val scoreValue = scoreText?.let { Score.from10(it) }
-
-        return if (quality.isEmpty()) {
-            val episode = Regex("Episode\\s?([0-9]+)").find(title)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                ?: this.select("div.gmr-numbeps > span").text().toIntOrNull()
+        return if (isSeries) {
             newAnimeSearchResponse(title, href, TvType.TvSeries) {
-                this.posterUrl = posterUrl
-                this.score = scoreValue
-                addSub(episode)
+                posterUrl?.let { poster = fixUrl(it) }
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
-                this.posterUrl = posterUrl
-                this.score = scoreValue
-                addQuality(quality)
+                posterUrl?.let { poster = fixUrl(it) }
             }
         }
     }
 
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        val doc = app.get(request.data).document
+        val items = doc.select(".movie-item").mapNotNull { it.toSearchResult() }
+        return newHomePageResponse(request.name, items)
+    }
+
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = app.get("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv", timeout = 50L).document
-        return document.select("article.item").mapNotNull { it.toSearchResult() }
+        val url = "$mainUrl/?s=${query.replace(" ", "+")}"
+        val doc = app.get(url).document
+        return doc.select(".movie-item").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val document = app.get(url).document
-        val title = document.selectFirst("h1.entry-title")?.text()?.substringBefore("Season")?.substringBefore("Episode")?.trim().toString()
-        val poster = fixUrlNull(document.selectFirst("figure.pull-left > img")?.attr("src"))
-        val tags = document.select("div.gmr-moviedata a").map { it.text() }
-        val year = document.select("div.gmr-moviedata strong:contains(Year:) > a").text().trim().toIntOrNull()
-        val tvType = if (url.contains("/tv/")) TvType.TvSeries else TvType.Movie
-        val description = document.selectFirst("div[itemprop=description] > p")?.text()?.trim()
-        val trailer = document.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
-        val ratingValue = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.toFloatOrNull()
-        val scoreValue = ratingValue?.let { Score.from10(it) }
-        val actors = document.select("div.gmr-moviedata").last()?.select("span[itemprop=actors]")?.map { it.select("a").text() }
+        val doc = app.get(url).document
+        val title = doc.selectFirst("h1")?.text() ?: "Tanpa Judul"
+        val poster = doc.selectFirst(".poster img")?.attr("data-src")
+        val desc = doc.selectFirst(".desc p")?.text()
+        val tags = doc.select(".genxed a").map { it.text() }
+        val actors = doc.select(".cast-list a").map { Actor(it.text()) }
 
-        return if (tvType == TvType.TvSeries) {
-            val episodes = document.select("div.vid-episodes a, div.gmr-listseries a").mapNotNull { eps ->
-                val href = fixUrl(eps.attr("href"))
-                val name = eps.text()
-                val episode = name.split(" ").lastOrNull()?.filter { it.isDigit() }?.toIntOrNull()
-                if (episode != null) {
-                    newEpisode(href) {
-                        this.name = name
-                        this.episode = episode
-                    }
-                } else null
+        val episodes = doc.select(".server-item a").mapIndexed { index, ep ->
+            newEpisode(ep.attr("href")) {
+                this.name = ep.text().ifBlank { "Episode ${index + 1}" }
             }
+        }
 
+        return if (episodes.isNotEmpty()) {
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
-                this.year = year
-                this.plot = description
+                this.plot = desc
                 this.tags = tags
-                this.score = scoreValue
-                addActors(actors?.map { ActorData(it) })
-                addTrailer(trailer)
+                this.actors = actors
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = poster
-                this.year = year
-                this.plot = description
+                this.plot = desc
                 this.tags = tags
-                this.score = scoreValue
-                addActors(actors?.map { ActorData(it) })
-                addTrailer(trailer)
+                this.actors = actors
             }
         }
     }
@@ -122,26 +87,9 @@ class Pusatfilm : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data).document
-        val iframeEl = document.selectFirst("div.gmr-embed-responsive iframe, div.movieplay iframe, iframe")
-        val iframe = listOf("src", "data-src", "data-litespeed-src").firstNotNullOfOrNull { key ->
-            iframeEl?.attr(key)?.takeIf { it.isNotBlank() }
-        }
-
-        if (!iframe.isNullOrBlank()) {
-            val refererBase = runCatching { getBaseUrl(iframe) }.getOrDefault(mainUrl) + "/"
-            loadExtractor(iframe, refererBase, subtitleCallback, callback)
-        }
+        val doc = app.get(data).document
+        val iframe = doc.selectFirst("iframe")?.attr("src") ?: return false
+        loadExtractor(fixUrl(iframe), mainUrl, callback)
         return true
-    }
-
-    private fun String?.fixImageQuality(): String? {
-        if (this == null) return null
-        val regex = Regex("(-\\d*x\\d*)").find(this)?.groupValues?.get(0) ?: return this
-        return this.replace(regex, "")
-    }
-
-    private fun getBaseUrl(url: String): String {
-        return URI(url).let { "${it.scheme}://${it.host}" }
     }
 }
