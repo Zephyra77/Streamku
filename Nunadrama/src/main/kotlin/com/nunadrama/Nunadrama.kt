@@ -32,7 +32,7 @@ class Nunadrama : MainAPI() {
         )
     }
 
-    private suspend fun request(url: String, ref: String? = null) = app.get(url)
+    private suspend fun request(url: String) = app.get(url)
     private suspend fun post(url: String, data: Map<String, String>) = app.post(url, data)
 
     private fun Element.getImageAttr(): String {
@@ -88,7 +88,7 @@ class Nunadrama : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val resp = request(url)
-        val directUrl = getBaseUrl(resp.url)
+        val baseUrl = getBaseUrl(resp.url)
         val document = resp.document
         val title = document.selectFirst("h1.entry-title")?.text()?.substringBefore("Season")?.substringBefore("Episode")?.trim().orEmpty()
         val poster = fixUrlNull(document.selectFirst("figure.pull-left > img")?.getImageAttr())?.fixImageQuality()
@@ -108,13 +108,13 @@ class Nunadrama : MainAPI() {
             if (epsEls.isEmpty()) {
                 val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
                 if (!postId.isNullOrEmpty()) {
-                    val ajax = post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId))
+                    val ajax = post("$baseUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId))
                     epsEls += ajax.document.select("a")
                 }
             }
 
             val episodes = epsEls.mapNotNull { eps ->
-                val href = eps.attr("href").let { if (it.isNotBlank()) fixUrl(it) else null } ?: return@mapNotNull null
+                val href = eps.attr("href").let { if (it.isNotBlank()) fixUrl(it) else return@mapNotNull null }
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
                 val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
                 newEpisode {
@@ -157,34 +157,39 @@ class Nunadrama : MainAPI() {
         val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
 
         if (id.isNullOrEmpty()) {
-            document.select("ul.muvipro-player-tabs li a").forEach { ele ->
+            document.select("ul.muvipro-player-tabs li a").amap { ele ->
                 val iframe = app.get(fixUrl(ele.attr("href")))
                     .document
                     .selectFirst("div.gmr-embed-responsive iframe")
                     ?.getIframeAttr()
                     ?.let { httpsify(it) }
-                    ?: return@forEach
+                    ?: return@amap
 
-                loadExtractor(iframe, data, subtitleCallback, callback)
+                loadExtractor(iframe, getBaseUrl(data), subtitleCallback, callback)
             }
         } else {
-            document.select("div.tab-content-ajax").forEach { ele ->
-                val server = app.post(
-                    "$directUrl/wp-admin/admin-ajax.php",
-                    mapOf(
+            document.select("div.tab-content-ajax").amap { ele ->
+                val server = post(
+                    "${getBaseUrl(data)}/wp-admin/admin-ajax.php",
+                    data = mapOf(
                         "action" to "muvipro_player_content",
                         "tab" to ele.attr("id"),
-                        "post_id" to id
+                        "post_id" to "$id"
                     )
-                ).document.selectFirst("iframe")?.attr("src")?.let { httpsify(it) } ?: return@forEach
+                ).document
+                    .select("iframe")
+                    .attr("src")
+                    .let { httpsify(it) }
 
-                loadExtractor(server, data, subtitleCallback, callback)
+                loadExtractor(server, getBaseUrl(data), subtitleCallback, callback)
             }
         }
 
         document.select("ul.gmr-download-list li a").forEach { linkEl ->
             val downloadUrl = linkEl.attr("href")
-            if (downloadUrl.isNotBlank()) loadExtractor(downloadUrl, data, subtitleCallback, callback)
+            if (downloadUrl.isNotBlank()) {
+                loadExtractor(downloadUrl, data, subtitleCallback, callback)
+            }
         }
 
         return true
