@@ -11,7 +11,6 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.nicehttp.Requests
 import com.lagradost.nicehttp.NiceResponse
 import org.jsoup.nodes.Element
-import org.jsoup.select.Elements
 import java.net.URI
 import kotlin.text.RegexOption
 
@@ -158,7 +157,7 @@ class Nunadrama : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data).document
+        val document = request(data).document
         val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
 
         if (id.isNullOrEmpty()) {
@@ -166,7 +165,7 @@ class Nunadrama : MainAPI() {
             for (ele in tabs) {
                 val href = ele.attr("href")
                 if (href.isBlank()) continue
-                val page = app.get(fixUrl(href)).document
+                val page = request(fixUrl(href)).document
                 val iframe = page.selectFirst("div.gmr-embed-responsive iframe") ?: page.selectFirst("iframe")
                 val src = iframe?.getIframeAttr()?.let { httpsify(it) } ?: continue
                 loadExtractor(src, "$directUrl/", subtitleCallback, callback)
@@ -174,7 +173,7 @@ class Nunadrama : MainAPI() {
         } else {
             val tabs = document.select("div.tab-content-ajax")
             for (ele in tabs) {
-                val resp = app.post("$directUrl/wp-admin/admin-ajax.php", data = mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to id))
+                val resp = post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to id))
                 val iframe = resp.document.selectFirst("iframe")
                 val src = iframe?.attr("src")?.let { httpsify(it) } ?: continue
                 loadExtractor(src, "$directUrl/", subtitleCallback, callback)
