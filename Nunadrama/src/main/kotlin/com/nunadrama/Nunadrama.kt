@@ -91,14 +91,7 @@ class Nunadrama : MainAPI() {
         val resp = request(url)
         directUrl = getBaseUrl(resp.url)
         val document = resp.document
-
-        val title = document.selectFirst("h1.entry-title")
-            ?.text()
-            ?.substringBefore("Season")
-            ?.substringBefore("Episode")
-            ?.trim()
-            .orEmpty()
-
+        val title = document.selectFirst("h1.entry-title")?.text()?.substringBefore("Season")?.substringBefore("Episode")?.trim().orEmpty()
         val poster = fixUrlNull(document.selectFirst("figure.pull-left > img")?.getImageAttr())?.fixImageQuality()
         val tags = document.select("div.gmr-moviedata a").map { it.text() }
         val year = document.select("div.gmr-moviedata strong:contains(Year:) > a").text().trim().toIntOrNull()
@@ -109,18 +102,26 @@ class Nunadrama : MainAPI() {
         val recommendations = document.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
 
         val isSeries = url.contains("/tv/")
-
         if (isSeries) {
-            val episodes = mutableListOf<Episode>()
-            val subtitleCallback: (SubtitleFile) -> Unit = {}
-            val extractorCallback: (ExtractorLink) -> Unit = { link ->
-                episodes.add(newEpisode(link.name ?: "Episode") {
-                    this.url = link.url
-                    this.quality = link.quality
-                })
+            val epsEls = mutableListOf<Element>()
+            epsEls += document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a")
+
+            if (epsEls.isEmpty()) {
+                val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+                if (!postId.isNullOrEmpty()) {
+                    val ajax = post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId))
+                    epsEls += ajax.document.select("a")
+                }
             }
 
-            loadLinks(url, false, subtitleCallback, extractorCallback)
+            val episodes = epsEls.mapNotNull { eps ->
+                val href = eps.attr("href").let { if (it.isNotBlank()) fixUrl(it) else return@mapNotNull null } 
+                val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
+                val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                newEpisode(name, href) {
+                    this.episode = epNum
+                }
+            }
 
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
