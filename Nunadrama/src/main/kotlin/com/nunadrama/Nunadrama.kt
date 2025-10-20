@@ -46,7 +46,7 @@ class Nunadrama : MainAPI() {
 
     private fun Element?.getIframeAttr(): String? {
         return this?.attr("data-litespeed-src").takeIf { it?.isNotEmpty() == true }
-                ?: this?.attr("src")
+            ?: this?.attr("src")
     }
 
     private fun String?.fixImageQuality(): String? {
@@ -77,13 +77,15 @@ class Nunadrama : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val urlPath = String.format(request.data, page)
         val resp = request("$mainUrl/$urlPath")
-        val items = resp.document.select("article[itemscope=itemscope], article.item").mapNotNull { it.toSearchResult() }
+        val items = resp.document.select("article[itemscope=itemscope], article.item")
+            .mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val resp = request("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
-        return resp.document.select("article[itemscope=itemscope], article.item").mapNotNull { it.toSearchResult() }
+        return resp.document.select("article[itemscope=itemscope], article.item")
+            .mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
@@ -117,7 +119,11 @@ class Nunadrama : MainAPI() {
                 val href = eps.attr("href").takeIf { it.isNotBlank() }?.let { fixUrl(it) } ?: return@mapNotNull null
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
                 val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                newEpisode(url = href, name = name, episode = epNum)
+                newEpisode {
+                    this.url = href
+                    this.name = name
+                    this.episode = epNum
+                }
             }
 
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
@@ -168,7 +174,7 @@ class Nunadrama : MainAPI() {
             document.select("div.tab-content-ajax").amap { ele ->
                 val server = post(
                     "${getBaseUrl(data)}/wp-admin/admin-ajax.php",
-                    data = mapOf(
+                    mapOf(
                         "action" to "muvipro_player_content",
                         "tab" to ele.attr("id"),
                         "post_id" to "$id"
