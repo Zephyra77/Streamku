@@ -1,0 +1,421 @@
+[
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=auratail.vip&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 14886,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "Anime"
+        ],
+        "version": 14,
+        "internalName": "Auratail",
+        "description": "Streaming anime dan donghua dari Auratail",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Auratail.cs3",
+        "name": "Auratail"
+    },
+    {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://justilien.com&size=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 25757,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated",
+            "TeKuma25"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 3,
+        "internalName": "Dutamovie",
+        "description": "DutaMovie",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Dutamovie.cs3",
+        "name": "Dutamovie"
+    },
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=funmovieslix.com&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 18623,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "phisher98"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TVSeries"
+        ],
+        "version": 4,
+        "internalName": "Funmovieslix",
+        "description": "Streaming filmmovie dan serial terbaru dari FunMovieFlix",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Funmovieslix.cs3",
+        "name": "Funmovieslix"
+    },
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=https://idlixplus.pro&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 23384,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated",
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "Anime",
+            "AsianDrama"
+        ],
+        "version": 21,
+        "internalName": "Idlix",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Idlix.cs3",
+        "name": "Idlix"
+    },
+    {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://tv2.kawanfilm21.co&size=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 25492,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Duro92"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 1,
+        "internalName": "Kawanfilm",
+        "description": "Kawanfilm",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Kawanfilm.cs3",
+        "name": "Kawanfilm"
+    },
+    {
+        "iconUrl": "https://www.klikxxi.com/favicon.ico",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 17193,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "AsianDrama"
+        ],
+        "version": 10,
+        "internalName": "KlikxxiProvider",
+        "description": "Klikxxi menampilkan Movie dan series",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/KlikxxiProvider.cs3",
+        "name": "KlikxxiProvider"
+    },
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=kuramanime.com&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 28481,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated",
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "Anime",
+            "OVA"
+        ],
+        "version": 40,
+        "internalName": "KuramanimeProvider",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/KuramanimeProvider.cs3",
+        "name": "KuramanimeProvider"
+    },
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=tv7.lk21.am.in&sz=%size%",
+        "jarFileSize": 81231,
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 18917,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated,Phisher98"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 5,
+        "internalName": "LayarkacaProvider",
+        "jarUrl": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/LayarkacaProvider.jar",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/LayarkacaProvider.cs3",
+        "name": "LayarkacaProvider"
+    },
+    {
+        "iconUrl": "https://tv11.melongmovies.com/wp-content/uploads/2023/01/cropped-favicon-32x32.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 17587,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 8,
+        "internalName": "Melongmovie",
+        "description": "Melongmovie menampilkan Movie dan TV Series terbaru dengan berbagai genre.",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Melongmovie.cs3",
+        "name": "Melongmovie"
+    },
+    {
+        "iconUrl": "https://moviebox.ph/favicon.ico",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 27317,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated",
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "TvSeries",
+            "Movie",
+            "Anime",
+            "AsianDrama"
+        ],
+        "version": 4,
+        "internalName": "Moviebox",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Moviebox.cs3",
+        "name": "Moviebox"
+    },
+    {
+        "iconUrl": "https://github.com/SaurabhKaperwan/CSX/raw/refs/heads/master/NetflixMirrorProvider/icon.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 45294,
+        "status": 1,
+        "authors": [
+            "megix"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "AsianDrama",
+            "Anime"
+        ],
+        "version": 32,
+        "internalName": "NetflixMirrorProvider",
+        "description": "Netflix, PrimeVideo, JioHotstar(Hotstar, Disney, Paramount, HBO, Peacock) Content in Multiple Languages",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/NetflixMirrorProvider.cs3",
+        "name": "NetflixMirrorProvider"
+    },
+    {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://new18.ngefilm.site&size=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 20563,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Duro92"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 3,
+        "internalName": "Ngefilm",
+        "description": "Ngefilm",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Ngefilm.cs3",
+        "name": "Ngefilm"
+    },
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=nimeindo.web.id&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 11352,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie",
+            "TvSeries"
+        ],
+        "version": 3,
+        "internalName": "Nimeindo",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Nimeindo.cs3",
+        "name": "Nimeindo"
+    },
+    {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://nomat.site&size=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 14083,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Duro92"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 3,
+        "internalName": "Nomat",
+        "description": "Nomat",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Nomat.cs3",
+        "name": "Nomat"
+    },
+    {
+        "iconUrl": "https://oploverz.ltd/favicon.ico",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 25250,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated",
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "Anime",
+            "OVA"
+        ],
+        "version": 31,
+        "internalName": "OploverzProvider",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/OploverzProvider.cs3",
+        "name": "OploverzProvider"
+    },
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=oppadrama&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 17740,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated",
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "Drama",
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "OppadramaProvider",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/OppadramaProvider.cs3",
+        "name": "OppadramaProvider"
+    },
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=otakudesu.watch&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 23275,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "Anime",
+            "OVA"
+        ],
+        "version": 17,
+        "internalName": "OtakudesuProvider",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/OtakudesuProvider.cs3",
+        "name": "OtakudesuProvider"
+    },
+    {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=ww73.pencurimovie.bond&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 12573,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "phisher98"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TVSeries"
+        ],
+        "version": 5,
+        "internalName": "Pencurimovie",
+        "description": "Streaming filmMovie dan serial terbaru dari Pencurimovie",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Pencurimovie.cs3",
+        "name": "Pencurimovie"
+    },
+    {
+        "iconUrl": "https://cdn.discordapp.com/attachments/1109266606292488297/1193122096159674448/2-modified.png?ex=65ec2a0a&is=65d9b50a&hm=f1e0b0165e71101e5440b47592d9e15727a6c00cdeb3512108067bfbdbef1af7&",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 137665,
+        "status": 1,
+        "language": "en",
+        "authors": [
+            "Hexated",
+            "Sora"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Anime",
+            "Movie"
+        ],
+        "version": 244,
+        "internalName": "SoraStream",
+        "description": "#1 best extention based on MultiAPI",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/SoraStream.cs3",
+        "name": "SoraStream"
+    },
+    {
+        "iconUrl": "https://zoronime.com/wp-content/themes/zoronime/favicon.png?v=0.06",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 17005,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "OVA",
+            "Anime"
+        ],
+        "version": 2,
+        "internalName": "Zoronime",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Zoronime.cs3",
+        "name": "Zoronime"
+    }
+]
