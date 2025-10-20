@@ -37,16 +37,16 @@ subprojects {
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
     cloudstream {
-        setRepo(System.getenv("GITHUB_REPOSITORY") ?: "https://github.com/Zephyra77/StreamArc")
-        authors = listOf("Zephyra77")
+        setRepo(System.getenv("GITHUB_REPOSITORY") ?: "https://github.com/duro92/ExtCloud")
+        authors = listOf("duro92")
     }
 
     android {
-        namespace = "com.zephyra77"
+        namespace = project.name
+        compileSdkVersion(35)
 
         defaultConfig {
             minSdk = 21
-            compileSdkVersion(35)
             targetSdk = 35
         }
 
@@ -57,7 +57,7 @@ subprojects {
 
         tasks.withType<KotlinJvmCompile> {
             compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_1_8)
+                jvmTarget.set(JvmTarget.JVM_17)
                 freeCompilerArgs.addAll(
                     "-Xno-call-assertions",
                     "-Xno-param-assertions",
@@ -71,10 +71,15 @@ subprojects {
         val cloudstream by configurations
         val implementation by configurations
 
-        cloudstream("com.lagradost:cloudstream3:pre-release")
+        if (project.name.equals("Nunadrama", ignoreCase = true)) {
+            cloudstream("com.lagradost:cloudstream3:0.1.0") // versi lama khusus Nunadrama
+            implementation("com.github.Blatzar:NiceHttp:0.4.11")
+        } else {
+            cloudstream("com.lagradost:cloudstream3:pre-release") // versi baru untuk modul lain
+            implementation("com.lagradost:nicehttp:0.5.0")
+        }
 
         implementation(kotlin("stdlib"))
-        implementation("com.github.Blatzar:NiceHttp:0.4.11")
         implementation("org.jsoup:jsoup:1.18.3")
         implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.16.0")
         implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
