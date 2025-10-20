@@ -7,9 +7,6 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.httpsify
-import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.toRecommendResult
-import com.lagradost.cloudstream3.utils.toSearchResult
 import com.lagradost.nicehttp.Requests
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
@@ -17,6 +14,7 @@ import java.net.URI
 import kotlin.text.RegexOption
 
 class Nunadrama : MainAPI() {
+
     override var mainUrl = "https://tvnunadrama.store"
     override var name = "Nunadrama"
     override val hasMainPage = true
@@ -32,6 +30,7 @@ class Nunadrama : MainAPI() {
     private suspend fun postDoc(url: String, data: Map<String, String>): Document =
         Requests.post(url, data = data, interceptor = interceptor).document
 
+    // ----- Element helpers -----
     private fun Element?.getIframeAttr(): String? {
         return this?.attr("data-litespeed-src").takeIf { it?.isNotEmpty() == true }
             ?: this?.attr("src")
@@ -52,9 +51,7 @@ class Nunadrama : MainAPI() {
         return this.replace(regex, "")
     }
 
-    private fun getBaseUrl(url: String): String {
-        return URI(url).let { "${it.scheme}://${it.host}" }
-    }
+    private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
 
     override val mainPage by lazy {
         mainPageOf(
@@ -72,14 +69,14 @@ class Nunadrama : MainAPI() {
         val urlPath = String.format(request.data, page)
         val respDoc = getDoc("$mainUrl/$urlPath")
         val items = respDoc.select("article[itemscope=itemscope], article.item")
-            .mapNotNull { element: Element -> element.toSearchResult() }
+            .mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val respDoc = getDoc("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
         return respDoc.select("article[itemscope=itemscope], article.item")
-            .mapNotNull { element: Element -> element.toSearchResult() }
+            .mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
@@ -95,14 +92,12 @@ class Nunadrama : MainAPI() {
         val trailer = document.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
         val rating = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.trim()
         val actors = document.select("div.gmr-moviedata span[itemprop=actors]").map { it.select("a").text() }
-        val recommendations = document.select("div.idmuvi-rp ul li")
-            .mapNotNull { element: Element -> element.toRecommendResult() }
+        val recommendations = document.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
 
         val isSeries = url.contains("/tv/")
         if (isSeries) {
             val epsEls = mutableListOf<Element>()
             epsEls += document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a")
-
             if (epsEls.isEmpty()) {
                 val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
                 if (!postId.isNullOrEmpty()) {
@@ -113,18 +108,15 @@ class Nunadrama : MainAPI() {
                     epsEls += ajaxDoc.select("a")
                 }
             }
-
-            val episodes = epsEls.mapNotNull { eps: Element ->
+            val episodes = epsEls.mapNotNull { eps ->
                 val href = eps.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
-                val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)
-                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
                 newEpisode(href) {
                     this.name = name
                     this.episode = epNum
                 }
             }
-
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
@@ -160,36 +152,41 @@ class Nunadrama : MainAPI() {
 
         if (id.isNullOrEmpty()) {
             document.select("ul.muvipro-player-tabs li a").forEach { ele ->
-                val iframe = getDoc(httpsify(ele.attr("href")))
-                    .selectFirst("div.gmr-embed-responsive iframe")
+                val iframe = getDoc(ele.attr("href")).selectFirst("div.gmr-embed-responsive iframe")
                     ?.getIframeAttr()
-                    ?.let { httpsify(it) }
-                    ?: return@forEach
-
+                    ?.let { httpsify(it) } ?: return@forEach
                 loadExtractor(iframe, "$directUrl/", subtitleCallback, callback)
             }
         } else {
             document.select("div.tab-content-ajax").forEach { ele ->
                 val server = postDoc(
                     "$directUrl/wp-admin/admin-ajax.php",
-                    mapOf(
-                        "action" to "muvipro_player_content",
-                        "tab" to ele.attr("id"),
-                        "post_id" to "$id"
-                    )
+                    mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to "$id")
                 ).select("iframe").attr("src").let { httpsify(it) }
-
                 loadExtractor(server, "$directUrl/", subtitleCallback, callback)
             }
         }
 
         document.select("ul.gmr-download-list li a").forEach { linkEl ->
             val downloadUrl = linkEl.attr("href")
-            if (downloadUrl.isNotBlank()) {
-                loadExtractor(downloadUrl, data, subtitleCallback, callback)
-            }
+            if (downloadUrl.isNotBlank()) loadExtractor(downloadUrl, data, subtitleCallback, callback)
         }
 
         return true
     }
+}
+
+// ----- Ekstensi helpers untuk Search & Recommend -----
+fun Element.toSearchResult(): SearchResponse? {
+    val title = selectFirst("h2.entry-title a")?.text() ?: return null
+    val href = selectFirst("h2.entry-title a")?.attr("href") ?: return null
+    val poster = selectFirst("figure.pull-left img")?.attr("abs:src")
+    return newSearchResponse(title, href) { this.posterUrl = poster }
+}
+
+fun Element.toRecommendResult(): SearchResponse? {
+    val title = selectFirst("h3.entry-title a")?.text() ?: return null
+    val href = selectFirst("h3.entry-title a")?.attr("href") ?: return null
+    val poster = selectFirst("img")?.attr("abs:src")
+    return newSearchResponse(title, href) { this.posterUrl = poster }
 }
