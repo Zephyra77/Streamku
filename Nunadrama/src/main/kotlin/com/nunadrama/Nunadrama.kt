@@ -18,7 +18,6 @@ class Nunadrama : MainAPI() {
     override val hasMainPage = true
     override var lang = "id"
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
-    private var directUrl: String? = null
     private val interceptor by lazy { CloudflareKiller() }
 
     override val mainPage by lazy {
@@ -33,7 +32,7 @@ class Nunadrama : MainAPI() {
         )
     }
 
-    private suspend fun request(url: String) = app.get(url)
+    private suspend fun request(url: String, ref: String? = null) = app.get(url)
     private suspend fun post(url: String, data: Map<String, String>) = app.post(url, data)
 
     private fun Element.getImageAttr(): String {
@@ -89,7 +88,7 @@ class Nunadrama : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val resp = request(url)
-        directUrl = getBaseUrl(resp.url)
+        val directUrl = getBaseUrl(resp.url)
         val document = resp.document
         val title = document.selectFirst("h1.entry-title")?.text()?.substringBefore("Season")?.substringBefore("Episode")?.trim().orEmpty()
         val poster = fixUrlNull(document.selectFirst("figure.pull-left > img")?.getImageAttr())?.fixImageQuality()
@@ -105,6 +104,7 @@ class Nunadrama : MainAPI() {
         if (isSeries) {
             val epsEls = mutableListOf<Element>()
             epsEls += document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a")
+
             if (epsEls.isEmpty()) {
                 val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
                 if (!postId.isNullOrEmpty()) {
@@ -114,17 +114,15 @@ class Nunadrama : MainAPI() {
             }
 
             val episodes = epsEls.mapNotNull { eps ->
-                val href = eps.attr("href").takeIf { it.isNotBlank() }?.let { fixUrl(it) } ?: return@mapNotNull null
+                val href = eps.attr("href").let { if (it.isNotBlank()) fixUrl(it) else null } ?: return@mapNotNull null
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
                 val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
-
                 newEpisode {
                     this.url = href
                     this.name = name
                     this.episode = epNum
                 }
             }
-
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
@@ -159,39 +157,34 @@ class Nunadrama : MainAPI() {
         val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
 
         if (id.isNullOrEmpty()) {
-            document.select("ul.muvipro-player-tabs li a").amap { ele ->
+            document.select("ul.muvipro-player-tabs li a").forEach { ele ->
                 val iframe = app.get(fixUrl(ele.attr("href")))
                     .document
                     .selectFirst("div.gmr-embed-responsive iframe")
                     ?.getIframeAttr()
                     ?.let { httpsify(it) }
-                    ?: return@amap
+                    ?: return@forEach
 
-                loadExtractor(iframe, "$directUrl/", subtitleCallback, callback)
+                loadExtractor(iframe, data, subtitleCallback, callback)
             }
         } else {
-            document.select("div.tab-content-ajax").amap { ele ->
+            document.select("div.tab-content-ajax").forEach { ele ->
                 val server = app.post(
                     "$directUrl/wp-admin/admin-ajax.php",
-                    data = mapOf(
+                    mapOf(
                         "action" to "muvipro_player_content",
                         "tab" to ele.attr("id"),
-                        "post_id" to "$id"
+                        "post_id" to id
                     )
-                ).document
-                    .select("iframe")
-                    .attr("src")
-                    .let { httpsify(it) }
+                ).document.selectFirst("iframe")?.attr("src")?.let { httpsify(it) } ?: return@forEach
 
-                loadExtractor(server, "$directUrl/", subtitleCallback, callback)
+                loadExtractor(server, data, subtitleCallback, callback)
             }
         }
 
         document.select("ul.gmr-download-list li a").forEach { linkEl ->
             val downloadUrl = linkEl.attr("href")
-            if (downloadUrl.isNotBlank()) {
-                loadExtractor(downloadUrl, data, subtitleCallback, callback)
-            }
+            if (downloadUrl.isNotBlank()) loadExtractor(downloadUrl, data, subtitleCallback, callback)
         }
 
         return true
