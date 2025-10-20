@@ -22,26 +22,13 @@ class Nunadrama : MainAPI() {
     private var directUrl: String? = null
     private val interceptor by lazy { CloudflareKiller() }
 
-    override val mainPage by lazy {
-        mainPageOf(
-            "page/%d/?s&search=advanced&post_type=movie" to "All Movies",
-            "genre/drama/page/%d/" to "Korean Series",
-            "genre/j-drama/page/%d/" to "Japan Series",
-            "genre/c-drama/page/%d/" to "China Series",
-            "genre/thai-drama/page/%d/" to "Thailand Series",
-            "genre/koleksi-series/page/%d/" to "Other Series",
-            "genre/variety-show/page/%d/" to "Variety Show"
-        )
-    }
-
-    // --- Helper baru untuk Requests ---
+    // Fungsi baru untuk menggantikan Requests.get/post langsung
     private suspend fun getDoc(url: String): org.jsoup.nodes.Document =
         Requests.get(url, interceptor = interceptor).document
 
     private suspend fun postDoc(url: String, data: Map<String, String>): org.jsoup.nodes.Document =
         Requests.post(url, data = data, interceptor = interceptor).document
 
-    // --- Utils ---
     private fun Element?.getIframeAttr(): String? {
         return this?.attr("data-litespeed-src").takeIf { it?.isNotEmpty() == true }
             ?: this?.attr("src")
@@ -66,7 +53,18 @@ class Nunadrama : MainAPI() {
         return URI(url).let { "${it.scheme}://${it.host}" }
     }
 
-    // --- MainPage ---
+    override val mainPage by lazy {
+        mainPageOf(
+            "page/%d/?s&search=advanced&post_type=movie" to "All Movies",
+            "genre/drama/page/%d/" to "Korean Series",
+            "genre/j-drama/page/%d/" to "Japan Series",
+            "genre/c-drama/page/%d/" to "China Series",
+            "genre/thai-drama/page/%d/" to "Thailand Series",
+            "genre/koleksi-series/page/%d/" to "Other Series",
+            "genre/variety-show/page/%d/" to "Variety Show"
+        )
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val urlPath = String.format(request.data, page)
         val document = getDoc("$mainUrl/$urlPath")
@@ -75,14 +73,12 @@ class Nunadrama : MainAPI() {
         return newHomePageResponse(request.name, items)
     }
 
-    // --- Search ---
     override suspend fun search(query: String): List<SearchResponse> {
         val document = getDoc("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
         return document.select("article[itemscope=itemscope], article.item")
             .mapNotNull { it.toSearchResult() }
     }
 
-    // --- Load ---
     override suspend fun load(url: String): LoadResponse {
         val document = getDoc(url)
         directUrl = getBaseUrl(url)
@@ -106,7 +102,10 @@ class Nunadrama : MainAPI() {
             if (epsEls.isEmpty()) {
                 val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
                 if (!postId.isNullOrEmpty()) {
-                    val ajaxDoc = postDoc("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId))
+                    val ajaxDoc = postDoc(
+                        "$directUrl/wp-admin/admin-ajax.php",
+                        mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
+                    )
                     epsEls += ajaxDoc.select("a")
                 }
             }
@@ -145,7 +144,6 @@ class Nunadrama : MainAPI() {
         }
     }
 
-    // --- LoadLinks ---
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -169,14 +167,12 @@ class Nunadrama : MainAPI() {
             document.select("div.tab-content-ajax").amap { ele ->
                 val server = postDoc(
                     "$directUrl/wp-admin/admin-ajax.php",
-                    data = mapOf(
+                    mapOf(
                         "action" to "muvipro_player_content",
                         "tab" to ele.attr("id"),
                         "post_id" to "$id"
                     )
-                ).select("iframe")
-                    .attr("src")
-                    .let { httpsify(it) }
+                ).select("iframe").attr("src").let { httpsify(it) }
 
                 loadExtractor(server, "$directUrl/", subtitleCallback, callback)
             }
@@ -190,30 +186,5 @@ class Nunadrama : MainAPI() {
         }
 
         return true
-    }
-
-    // --- Extension helpers ---
-    private fun Element.toSearchResult(): SearchResponse? {
-        val title = selectFirst("h2.entry-title > a")?.text()?.trim() ?: return null
-        val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = selectFirst("a > img")?.getImageAttr()?.fixImageQuality()
-        val quality = select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
-        return if (quality.isEmpty()) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = poster }
-        } else {
-            newMovieSearchResponse(title, href, TvType.Movie) {
-                this.posterUrl = poster
-                addQuality(quality)
-            }
-        }
-    }
-
-    private fun Element.toRecommendResult(): SearchResponse? {
-        val title = selectFirst("a > span.idmuvi-rp-title")?.text()?.trim() ?: return null
-        val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = selectFirst("img")?.getImageAttr()?.fixImageQuality()
-        return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = poster
-        }
     }
 }
