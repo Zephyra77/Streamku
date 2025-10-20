@@ -8,8 +8,6 @@ import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.nicehttp.Requests
-import com.lagradost.nicehttp.NiceResponse
 import org.jsoup.nodes.Element
 import java.net.URI
 import kotlin.text.RegexOption
@@ -35,17 +33,17 @@ class Nunadrama : MainAPI() {
         )
     }
 
-    private suspend fun request(url: String, ref: String? = null): NiceResponse =
-        Requests.get(url, headers = ref, interceptor = interceptor)
+    // Pakai app.get() dan app.post() bawaan MainAPI
+    private suspend fun request(url: String, ref: String? = null) = app.get(url)
+    private suspend fun post(url: String, data: Map<String, String>) = app.post(url, data)
 
-    private suspend fun post(url: String, data: Map<String, String>): NiceResponse =
-        Requests.post(url, data = data, interceptor = interceptor)
-
-    private fun Element.getImageAttr(): String? = when {
-        hasAttr("data-src") -> attr("abs:data-src")
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-        else -> attr("abs:src")
+    private fun Element.getImageAttr(): String? {
+        return when {
+            hasAttr("data-src") -> attr("abs:data-src")
+            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+            else -> attr("abs:src")
+        }
     }
 
     private fun Element?.getIframeAttr(): String? {
@@ -155,7 +153,7 @@ class Nunadrama : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = request(data).document
+        val document = app.get(data).document
         val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
 
         if (id.isNullOrEmpty()) {
@@ -163,7 +161,7 @@ class Nunadrama : MainAPI() {
             for (ele in tabs) {
                 val href = ele.attr("href")
                 if (href.isBlank()) continue
-                val page = request(fixUrl(href)).document
+                val page = app.get(fixUrl(href)).document
                 val iframe = page.selectFirst("div.gmr-embed-responsive iframe") ?: page.selectFirst("iframe")
                 val src = iframe?.getIframeAttr()?.let { httpsify(it) } ?: continue
                 loadExtractor(src, "$directUrl/", subtitleCallback, callback)
@@ -171,7 +169,7 @@ class Nunadrama : MainAPI() {
         } else {
             val tabs = document.select("div.tab-content-ajax")
             for (ele in tabs) {
-                val resp = post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to id))
+                val resp = app.post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to id))
                 val iframe = resp.document.selectFirst("iframe")
                 val src = iframe?.attr("src")?.let { httpsify(it) } ?: continue
                 loadExtractor(src, "$directUrl/", subtitleCallback, callback)
@@ -198,10 +196,12 @@ class Nunadrama : MainAPI() {
         }
     }
 
-    private fun getImageAttrFromElement(el: Element): String? = when {
-        el.hasAttr("data-src") -> el.attr("abs:data-src")
-        el.hasAttr("data-lazy-src") -> el.attr("abs:data-lazy-src")
-        el.hasAttr("srcset") -> el.attr("abs:srcset").substringBefore(" ")
-        else -> el.attr("abs:src")
+    private fun getImageAttrFromElement(el: Element): String? {
+        return when {
+            el.hasAttr("data-src") -> el.attr("abs:data-src")
+            el.hasAttr("data-lazy-src") -> el.attr("abs:data-lazy-src")
+            el.hasAttr("srcset") -> el.attr("abs:srcset").substringBefore(" ")
+            else -> el.attr("abs:src")
+        }
     }
 }
