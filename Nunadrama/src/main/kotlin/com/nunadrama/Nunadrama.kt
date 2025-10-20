@@ -8,7 +8,11 @@ import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.toRecommendResult
+import com.lagradost.cloudstream3.utils.toSearchResult
 import com.lagradost.nicehttp.Requests
+import com.lagradost.nicehttp.NiceResponse
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URI
 import kotlin.text.RegexOption
@@ -22,11 +26,11 @@ class Nunadrama : MainAPI() {
     private var directUrl: String? = null
     private val interceptor by lazy { CloudflareKiller() }
 
-    // Fungsi baru untuk menggantikan Requests.get/post langsung
-    private suspend fun getDoc(url: String): org.jsoup.nodes.Document =
+    // ----- GET / POST helpers -----
+    private suspend fun getDoc(url: String): Document =
         Requests.get(url, interceptor = interceptor).document
 
-    private suspend fun postDoc(url: String, data: Map<String, String>): org.jsoup.nodes.Document =
+    private suspend fun postDoc(url: String, data: Map<String, String>): Document =
         Requests.post(url, data = data, interceptor = interceptor).document
 
     private fun Element?.getIframeAttr(): String? {
@@ -67,16 +71,16 @@ class Nunadrama : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val urlPath = String.format(request.data, page)
-        val document = getDoc("$mainUrl/$urlPath")
-        val items = document.select("article[itemscope=itemscope], article.item")
-            .mapNotNull { it.toSearchResult() }
+        val respDoc = getDoc("$mainUrl/$urlPath")
+        val items = respDoc.select("article[itemscope=itemscope], article.item")
+            .mapNotNull { element: Element -> element.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = getDoc("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
-        return document.select("article[itemscope=itemscope], article.item")
-            .mapNotNull { it.toSearchResult() }
+        val respDoc = getDoc("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
+        return respDoc.select("article[itemscope=itemscope], article.item")
+            .mapNotNull { element: Element -> element.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
@@ -92,7 +96,8 @@ class Nunadrama : MainAPI() {
         val trailer = document.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
         val rating = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.trim()
         val actors = document.select("div.gmr-moviedata span[itemprop=actors]").map { it.select("a").text() }
-        val recommendations = document.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
+        val recommendations = document.select("div.idmuvi-rp ul li")
+            .mapNotNull { element: Element -> element.toRecommendResult() }
 
         val isSeries = url.contains("/tv/")
         if (isSeries) {
@@ -110,10 +115,11 @@ class Nunadrama : MainAPI() {
                 }
             }
 
-            val episodes = epsEls.mapNotNull { eps ->
+            val episodes = epsEls.mapNotNull { eps: Element ->
                 val href = eps.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
-                val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)
+                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
                 newEpisode(href) {
                     this.name = name
                     this.episode = epNum
@@ -154,17 +160,17 @@ class Nunadrama : MainAPI() {
         val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
 
         if (id.isNullOrEmpty()) {
-            document.select("ul.muvipro-player-tabs li a").amap { ele ->
+            document.select("ul.muvipro-player-tabs li a").forEach { ele ->
                 val iframe = getDoc(fixUrl(ele.attr("href")))
                     .selectFirst("div.gmr-embed-responsive iframe")
                     ?.getIframeAttr()
                     ?.let { httpsify(it) }
-                    ?: return@amap
+                    ?: return@forEach
 
                 loadExtractor(iframe, "$directUrl/", subtitleCallback, callback)
             }
         } else {
-            document.select("div.tab-content-ajax").amap { ele ->
+            document.select("div.tab-content-ajax").forEach { ele ->
                 val server = postDoc(
                     "$directUrl/wp-admin/admin-ajax.php",
                     mapOf(
