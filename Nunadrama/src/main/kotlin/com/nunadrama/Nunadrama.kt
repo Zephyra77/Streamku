@@ -114,15 +114,12 @@ class Nunadrama : MainAPI() {
             }
 
             val episodes = epsEls.mapNotNull { eps ->
-                val href = eps.attr("href").let { if (it.isNotBlank()) fixUrl(it) else return@mapNotNull null }
+                val href = eps.attr("href").takeIf { it.isNotBlank() }?.let { fixUrl(it) } ?: return@mapNotNull null
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
                 val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                newEpisode {
-                    this.url = href
-                    this.name = name
-                    this.episode = epNum
-                }
+                newEpisode(url = href, name = name, episode = epNum)
             }
+
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
