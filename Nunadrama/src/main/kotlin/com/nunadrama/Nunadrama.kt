@@ -34,7 +34,6 @@ class Nunadrama : MainAPI() {
         )
     }
 
-    // Helper untuk GET / POST agar mudah dipakai
     private suspend fun getDoc(url: String): org.jsoup.nodes.Document =
         Requests.get(url, interceptor = interceptor).document
 
@@ -43,7 +42,7 @@ class Nunadrama : MainAPI() {
 
     private fun Element?.getIframeAttr(): String? {
         return this?.attr("data-litespeed-src").takeIf { it?.isNotEmpty() == true }
-            ?: this?.attr("src")
+                ?: this?.attr("src")
     }
 
     private fun Element.getImageAttr(): String {
@@ -67,22 +66,22 @@ class Nunadrama : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val urlPath = String.format(request.data, page)
-        val document = getDoc("$mainUrl/$urlPath")
-        val items = document.select("article[itemscope=itemscope], article.item")
+        val resp = getDoc("$mainUrl/$urlPath")
+        val items = resp.select("article[itemscope=itemscope], article.item")
             .mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val document = getDoc("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
-        return document.select("article[itemscope=itemscope], article.item")
+        val resp = getDoc("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
+        return resp.select("article[itemscope=itemscope], article.item")
             .mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val document = getDoc(url)
+        val resp = getDoc(url)
         directUrl = getBaseUrl(url)
-
+        val document = resp
         val title = document.selectFirst("h1.entry-title")?.text()?.substringBefore("Season")
             ?.substringBefore("Episode")?.trim().orEmpty()
         val poster = document.selectFirst("figure.pull-left > img")?.getImageAttr()?.fixImageQuality()
@@ -102,19 +101,15 @@ class Nunadrama : MainAPI() {
             if (epsEls.isEmpty()) {
                 val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
                 if (!postId.isNullOrEmpty()) {
-                    epsEls += postDoc("$directUrl/wp-admin/admin-ajax.php", mapOf(
-                        "action" to "muvipro_player_content",
-                        "tab" to "server",
-                        "post_id" to postId
-                    )).select("a")
+                    val ajax = postDoc("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId))
+                    epsEls += ajax.select("a")
                 }
             }
 
             val episodes = epsEls.mapNotNull { eps ->
                 val href = eps.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
-                val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE)
-                    .find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
                 newEpisode(href) {
                     this.name = name
                     this.episode = epNum
@@ -168,7 +163,7 @@ class Nunadrama : MainAPI() {
             document.select("div.tab-content-ajax").amap { ele ->
                 val server = postDoc(
                     "$directUrl/wp-admin/admin-ajax.php",
-                    mapOf(
+                    data = mapOf(
                         "action" to "muvipro_player_content",
                         "tab" to ele.attr("id"),
                         "post_id" to "$id"
@@ -189,6 +184,7 @@ class Nunadrama : MainAPI() {
         return true
     }
 
+    // Extension function untuk search result
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h2.entry-title > a")?.text()?.trim() ?: return null
         val href = selectFirst("a")?.attr("href") ?: return null
