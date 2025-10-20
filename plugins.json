@@ -294,6 +294,27 @@
         "name": "Nomat"
     },
     {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://tvnunadrama.store&size=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 16822,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 5,
+        "internalName": "Nunadrama",
+        "description": "TVNunaDrama",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Nunadrama.cs3",
+        "name": "Nunadrama"
+    },
+    {
         "iconUrl": "https://oploverz.ltd/favicon.ico",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Zephyra77/Streamku",
