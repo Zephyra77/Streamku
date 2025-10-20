@@ -7,12 +7,7 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io") {
-            metadataSources {
-                mavenPom()
-                artifact()
-            }
-        }
+        maven("https://jitpack.io")
     }
 
     dependencies {
@@ -26,12 +21,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io") {
-            metadataSources {
-                mavenPom()
-                artifact()
-            }
-        }
+        maven("https://jitpack.io")
     }
 }
 
@@ -47,17 +37,16 @@ subprojects {
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
     cloudstream {
-        setRepo("https://github.com/Zephyra77/Streamku")
+        setRepo(System.getenv("GITHUB_REPOSITORY") ?: "https://github.com/Zephyra77/Streamku")
         authors = listOf("Zephyra77")
     }
 
     android {
         namespace = "com.Zephyra77"
 
-        compileSdkVersion(35)
-
         defaultConfig {
             minSdk = 21
+            compileSdkVersion(35)
             targetSdk = 35
         }
 
@@ -68,7 +57,7 @@ subprojects {
 
         tasks.withType<KotlinJvmCompile> {
             compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_17)
+                jvmTarget.set(JvmTarget.JVM_1_8)
                 freeCompilerArgs.addAll(
                     "-Xno-call-assertions",
                     "-Xno-param-assertions",
@@ -85,7 +74,7 @@ subprojects {
         cloudstream("com.lagradost:cloudstream3:pre-release")
 
         implementation(kotlin("stdlib"))
-        implementation("com.lagradost:nicehttp:0.5.0")
+        implementation("com.github.Blatzar:NiceHttp:0.4.13") // versi stabil, pasti bisa di-resolve
         implementation("org.jsoup:jsoup:1.19.1")
         implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.16.0")
         implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
@@ -98,6 +87,8 @@ subprojects {
         implementation("com.squareup.okhttp3:okhttp:4.12.0")
         implementation("androidx.core:core-ktx:1.16.0")
         implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
+        implementation("com.github.vidstige:jadb:v1.2.1")
+        implementation("org.bouncycastle:bcpkix-jdk15on:1.70")
     }
 }
 
