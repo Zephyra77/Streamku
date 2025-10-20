@@ -12,8 +12,8 @@ buildscript {
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
+        classpath("com.github.recloudstream:gradle:0.1.0")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0")
-        classpath("com.github.recloudstream:gradle:master-SNAPSHOT")
     }
 }
 
@@ -44,6 +44,7 @@ subprojects {
     android {
         namespace = project.name
         compileSdkVersion(35)
+
         defaultConfig {
             minSdk = 21
             targetSdk = 35
@@ -70,8 +71,9 @@ subprojects {
         val implementation by configurations
         val cloudstream by configurations
 
-        cloudstream("com.github.recloudstream:CloudStream:master-SNAPSHOT")
+        cloudstream("com.lagradost:cloudstream3:0.1.0")
         implementation("com.lagradost:nicehttp:0.5.0")
+
         implementation(kotlin("stdlib"))
         implementation("org.jsoup:jsoup:1.19.1")
         implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.16.0")
