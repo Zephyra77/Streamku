@@ -11,7 +11,6 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.toRecommendResult
 import com.lagradost.cloudstream3.utils.toSearchResult
 import com.lagradost.nicehttp.Requests
-import com.lagradost.nicehttp.NiceResponse
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URI
@@ -161,7 +160,7 @@ class Nunadrama : MainAPI() {
 
         if (id.isNullOrEmpty()) {
             document.select("ul.muvipro-player-tabs li a").forEach { ele ->
-                val iframe = getDoc(fixUrl(ele.attr("href")))
+                val iframe = getDoc(httpsify(ele.attr("href")))
                     .selectFirst("div.gmr-embed-responsive iframe")
                     ?.getIframeAttr()
                     ?.let { httpsify(it) }
