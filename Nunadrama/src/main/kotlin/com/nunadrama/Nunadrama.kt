@@ -6,7 +6,6 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
-import java.net.URI
 
 class Nunadrama : MainAPI() {
     override var mainUrl = "https://tvnunadrama.store"
@@ -124,17 +123,15 @@ class Nunadrama : MainAPI() {
         val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
 
         if (id.isNullOrEmpty()) {
-            document.select("ul.muvipro-player-tabs li a").amap { ele ->
-                val iframe = app.get(fixUrl(ele.attr("href")))
-                    .document
-                    .selectFirst("div.gmr-embed-responsive iframe")
-                    ?.getIframeAttr()
+            document.select("ul.muvipro-player-tabs li a").apmap { ele ->
+                val iframe = app.get(fixUrl(ele.attr("href"))).document
+                    .selectFirst("div.gmr-embed-responsive iframe")?.attr("src")
                     ?.let { httpsify(it) }
-                    ?: return@amap
+                    ?: return@apmap
                 loadExtractor(iframe, "$directUrl/", subtitleCallback, callback)
             }
         } else {
-            document.select("div.tab-content-ajax").amap { ele ->
+            document.select("div.tab-content-ajax").apmap { ele ->
                 val server = app.post(
                     "$directUrl/wp-admin/admin-ajax.php",
                     data = mapOf(
@@ -162,7 +159,7 @@ class Nunadrama : MainAPI() {
     private fun Element.toRecommendResult(): SearchResponse? {
         val title = selectFirst("a > span.idmuvi-rp-title")?.text()?.trim() ?: return null
         val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr()?.fixImageQuality())
+        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr())
         return newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = poster }
     }
 }
