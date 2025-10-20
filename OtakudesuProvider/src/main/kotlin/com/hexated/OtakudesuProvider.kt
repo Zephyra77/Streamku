@@ -59,8 +59,7 @@ class OtakudesuProvider : MainAPI() {
         val title = this.selectFirst("h2.jdlflm")?.text()?.trim() ?: return null
         val href = this.selectFirst("a")!!.attr("href")
         val posterUrl = this.select("div.thumbz > img").attr("src").toString()
-        val epNum = this.selectFirst("div.epz")?.ownText()?.replace(Regex("\\D"), "")?.toIntOrNull()
-
+        val epNum = this.selectFirst("div.epz")?.ownText()?.replace(Regex("\\D"), "")?.trim()?.toIntOrNull()
         return newAnimeSearchResponse(title, href, TvType.Anime) {
             this.posterUrl = posterUrl
             addSub(epNum)
@@ -79,19 +78,32 @@ class OtakudesuProvider : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
-        val title = document.selectFirst("div.infozingle > p:nth-child(1) > span")?.ownText()?.replace(":", "")?.trim().toString()
+
+        val title = document.selectFirst("div.infozingle > p:nth-child(1) > span")?.ownText()
+            ?.replace(":", "")?.trim().toString()
         val poster = document.selectFirst("div.fotoanime > img")?.attr("src")
         val tags = document.select("div.infozingle > p:nth-child(11) > span > a").map { it.text() }
-        val type = getType(document.selectFirst("div.infozingle > p:nth-child(5) > span")?.ownText()?.replace(":", "")?.trim() ?: "tv")
-        val year = Regex("\\d{4}").find(document.select("div.infozingle > p:nth-child(9) > span").text())?.value?.toIntOrNull()
-        val status = getStatus(document.selectFirst("div.infozingle > p:nth-child(6) > span")!!.ownText().replace(":", "").trim())
+        val type = getType(
+            document.selectFirst("div.infozingle > p:nth-child(5) > span")?.ownText()
+                ?.replace(":", "")?.trim() ?: "tv"
+        )
+
+        val year = Regex("\\d{4}").find(
+            document.select("div.infozingle > p:nth-child(9) > span").text()
+        )?.value?.toIntOrNull()
+
+        val status = getStatus(
+            document.selectFirst("div.infozingle > p:nth-child(6) > span")!!.ownText()
+                .replace(":", "")
+                .trim()
+        )
         val description = document.select("div.sinopc > p").text()
 
         val episodes = document.select("div.episodelist")[1].select("ul > li").mapNotNull {
             val name = it.selectFirst("a")?.text() ?: return@mapNotNull null
-            val episode = Regex("Episode\\s?(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            val epNum = Regex("Episode\\s?(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
             val link = fixUrl(it.selectFirst("a")!!.attr("href"))
-            newEpisode(link) { this.episode = episode }
+            newEpisode(link) { this.episode = epNum }
         }.reversed()
 
         val recommendations = document.select("div.isi-recommend-anime-series > div.isi-konten").map {
@@ -101,24 +113,32 @@ class OtakudesuProvider : MainAPI() {
             newAnimeSearchResponse(recName, recHref, TvType.Anime) { this.posterUrl = recPosterUrl }
         }
 
+        val tracker = APIHolder.getTracker(listOf(title), TrackerType.getTypes(type), year, true)
+
         return newAnimeLoadResponse(title, url, type) {
-            posterUrl = poster
+            engName = title
+            posterUrl = tracker?.image ?: poster
+            backgroundPosterUrl = tracker?.cover
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
             plot = description
             this.tags = tags
             this.recommendations = recommendations
+            addMalId(tracker?.malId)
+            addAniListId(tracker?.aniId?.toIntOrNull())
         }
     }
 
     data class ResponseSources(
         @JsonProperty("id") val id: String,
         @JsonProperty("i") val i: String,
-        @JsonProperty("q") val q: String
+        @JsonProperty("q") val q: String,
     )
 
-    data class ResponseData(@JsonProperty("data") val data: String)
+    data class ResponseData(
+        @JsonProperty("data") val data: String
+    )
 
     override suspend fun loadLinks(
         data: String,
@@ -126,7 +146,10 @@ class OtakudesuProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+
         val document = app.get(data).document
+
+        // Mirror list (encoded)
         val mirrorData = document.select("div.mirrorstream > ul > li").mapNotNull {
             base64Decode(it.select("a").attr("data-content"))
         }
@@ -134,26 +157,48 @@ class OtakudesuProvider : MainAPI() {
         for (resJson in mirrorData) {
             val resList = tryParseJson<List<ResponseSources>>(resJson)
             resList?.forEach { res ->
-                val sources = Jsoup.parse(
-                    base64Decode(
-                        app.post(
-                            "$mainUrl/wp-admin/admin-ajax.php",
-                            data = mapOf("id" to res.id, "i" to res.i, "q" to res.q)
-                        ).parsed<ResponseData>().data
+                val posted = app.post(
+                    "${mainUrl}/wp-admin/admin-ajax.php",
+                    data = mapOf(
+                        "id" to res.id,
+                        "i" to res.i,
+                        "q" to res.q,
+                        "nonce" to "",
+                        "action" to ""
                     )
-                ).select("iframe").attr("src")
+                ).parsed<ResponseData>().data
+                val sources = Jsoup.parse(base64Decode(posted)).select("iframe").attr("src")
                 loadCustomExtractor(sources, data, subtitleCallback, callback, getQuality(res.q))
             }
         }
 
+        // Download section
         document.select("div.download li").forEach { ele ->
             val quality = getQuality(ele.select("strong").text())
-            ele.select("a").map { it.attr("href") }
-                .filter { !inBlacklist(it) && quality != Qualities.P360.value }
-                .forEach {
-                    val link = app.get(it, referer = "$mainUrl/").url
+            ele.select("a").map { it.attr("href") to it.text() }
+                .filter { !inBlacklist(it.first) && quality != Qualities.P360.value }
+                .forEach { pair ->
+                    val link = app.get(pair.first, referer = "$mainUrl/").url
                     loadCustomExtractor(fixedIframe(link), data, subtitleCallback, callback, quality)
                 }
+        }
+
+        // Some sites also use an ajax flow -> parallel safe calls with same behavior
+        // We implement the same logic but sequentially here (keeps compatibility)
+        val scriptData = document.select("script:containsData(action:)").lastOrNull()?.data()
+        if (!scriptData.isNullOrEmpty()) {
+            val token = scriptData.substringAfter("{action:\"").substringBefore("\"}").toString()
+            val nonce = app.post("$mainUrl/wp-admin/admin-ajax.php", data = mapOf("action" to token)).parsed<ResponseData>().data
+            val action = scriptData.substringAfter(",action:\"").substringBefore("\"}").toString()
+            val mirrorData2 = document.select("div.mirrorstream > ul > li").mapNotNull { base64Decode(it.select("a").attr("data-content")) }.toString()
+            tryParseJson<List<ResponseSources>>(mirrorData2)?.forEach { res ->
+                val posted = app.post(
+                    "${mainUrl}/wp-admin/admin-ajax.php",
+                    data = mapOf("id" to res.id, "i" to res.i, "q" to res.q, "nonce" to nonce, "action" to action)
+                ).parsed<ResponseData>().data
+                val sources = Jsoup.parse(base64Decode(posted)).select("iframe").attr("src")
+                loadCustomExtractor(sources, data, subtitleCallback, callback, getQuality(res.q))
+            }
         }
 
         return true
@@ -164,12 +209,17 @@ class OtakudesuProvider : MainAPI() {
         referer: String? = null,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
-        quality: Int = Qualities.Unknown.value
+        quality: Int = Qualities.Unknown.value,
     ) {
         loadExtractor(url, referer, subtitleCallback) { link ->
             runBlocking {
                 callback.invoke(
-                    newExtractorLink(link.name, link.name, link.url, link.type) {
+                    newExtractorLink(
+                        link.name,
+                        link.name,
+                        link.url,
+                        link.type
+                    ) {
                         this.referer = link.referer
                         this.quality = quality
                         this.headers = link.headers
@@ -181,19 +231,32 @@ class OtakudesuProvider : MainAPI() {
     }
 
     private fun fixedIframe(url: String): String {
-        return if (url.startsWith(acefile)) {
-            val id = Regex("""(?:/f/|/file/)(\w+)""").find(url)?.groupValues?.getOrNull(1)
-            "$acefile/player/$id"
-        } else fixUrl(url)
+        return when {
+            url.startsWith(acefile) -> {
+                val id = Regex("""(?:/f/|/file/)(\w+)""").find(url)?.groupValues?.getOrNull(1)
+                "${acefile}/player/$id"
+            }
+            else -> fixUrl(url)
+        }
     }
 
-    private fun inBlacklist(host: String?): Boolean = mirrorBlackList.any { it.equals(host, true) }
+    private fun inBlacklist(host: String?): Boolean {
+        return mirrorBlackList.any { it.equals(host, true) }
+    }
 
-    private fun getQuality(str: String?): Int =
-        Regex("(\\d{3,4})[pP]").find(str ?: "")?.groupValues?.getOrNull(1)?.toIntOrNull()
+    private fun getQuality(str: String?): Int {
+        return Regex("(\\d{3,4})[pP]").find(str ?: "")?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: Qualities.Unknown.value
+    }
 }
 
+// single definition of Odvidhide (Filesim)
+class Odvidhide : Filesim() {
+    override val name = "Odvidhide"
+    override var mainUrl = "https://odvidhide.com"
+}
+
+// additional small JWPlayer wrappers if needed
 class Moedesu : JWPlayer() {
     override val name = "Moedesu"
     override val mainUrl = "https://desustream.me/moedesu/"
@@ -207,9 +270,4 @@ class DesuBeta : JWPlayer() {
 class Desudesuhd : JWPlayer() {
     override val name = "Desudesuhd"
     override val mainUrl = "https://desustream.me/desudesuhd/"
-}
-
-class Odvidhide : Filesim() {
-    override val name = "Odvidhide"
-    override var mainUrl = "https://odvidhide.com"
 }

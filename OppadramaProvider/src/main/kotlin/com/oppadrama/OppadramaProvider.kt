@@ -55,9 +55,10 @@ class OppadramaProvider : MainAPI() {
     }
 
     private fun getProperDramaLink(uri: String): String {
+        // jika uri adalah link episode, ambil base series
         return if (uri.contains("-episode-")) {
-            val match = Regex("$mainUrl/(.+)-ep.+").find(uri)?.groupValues?.getOrNull(1)
-            "$mainUrl/series/$match"
+            val match = Regex(".+/(.+)-ep.+").find(uri)?.groupValues?.getOrNull(1)
+            if (match != null) "$mainUrl/series/$match" else uri
         } else {
             uri
         }
@@ -124,6 +125,7 @@ class OppadramaProvider : MainAPI() {
             fixUrl(src)
         }
 
+        // panggil loadExtractor untuk setiap sumber yang valid
         for (src in sources) {
             loadExtractor(src, mainUrl, subtitleCallback, callback)
         }

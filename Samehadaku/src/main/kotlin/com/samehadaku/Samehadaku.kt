@@ -1,9 +1,6 @@
 package com.samehadaku
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addAniListId
-import com.lagradost.cloudstream3.LoadResponse.Companion.addMalId
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import kotlinx.coroutines.runBlocking
 import org.jsoup.nodes.Element
@@ -47,21 +44,26 @@ class Samehadaku : MainAPI() {
         val home = document.select("div.animposx, article.bs").mapNotNull { it.toSearchResult() }
 
         return newHomePageResponse(
-            list = HomePageList(
+            HomePageList(
                 name = request.name,
                 list = home,
-                isHorizontalImages = false
+                isHorizontal = false
             ),
             hasNext = document.select("a.next.page-numbers").isNotEmpty()
         )
     }
 
     private fun Element.toSearchResult(): AnimeSearchResponse? {
-        val aTag = this.selectFirst("a") ?: return null
+        val aTag = selectFirst("a") ?: return null
         val title = aTag.attr("title").ifEmpty { aTag.text() }
         val href = fixUrl(aTag.attr("href")) ?: return null
         val posterUrl = fixUrl(aTag.selectFirst("img")?.attr("src")) ?: ""
-        return newAnimeSearchResponse(title, href, TvType.Anime) {
+        return AnimeSearchResponse(
+            title = title,
+            url = href,
+            apiName = this@Samehadaku.name,
+            type = TvType.Anime
+        ).apply {
             this.posterUrl = posterUrl
         }
     }
@@ -72,9 +74,10 @@ class Samehadaku : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val fixUrl = if (url.contains("/anime/")) url else app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href") ?: return null
-        val document = app.get(fixUrl).document
+        val fixUrl = if (url.contains("/anime/")) url
+        else app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href") ?: return null
 
+        val document = app.get(fixUrl).document
         val title = document.selectFirst("h1.entry-title")?.text()?.removeBloat() ?: return null
         val poster = document.selectFirst("div.thumb > img")?.attr("src") ?: ""
         val tags = document.select("div.genre-info > a").map { it.text() }
@@ -87,48 +90,70 @@ class Samehadaku : MainAPI() {
             val header = it.selectFirst("span.lchx a") ?: return@mapNotNull null
             val num = Regex("Episode\\s?(\\d+)").find(header.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
             val link = fixUrl(header.attr("href")) ?: return@mapNotNull null
-            newEpisode(link) { episode = num }
+            Episode(link, episode = num)
         }.reversed()
 
         val recommendations = document.select("aside#sidebar ul li").mapNotNull { it.toSearchResult() }
-        val tracker = APIHolder.getTracker(listOf(title), TrackerType.getTypes(type), year, true)
 
-        return newAnimeLoadResponse(title, url, type) {
+        return AnimeLoadResponse(
+            name = title,
+            url = url,
+            type = type
+        ).apply {
             engName = title
-            posterUrl = tracker?.image?.let { fixUrl(it) } ?: poster
-            backgroundPosterUrl = tracker?.cover?.let { fixUrl(it) }
+            posterUrl = poster
+            backgroundPosterUrl = null
             this.year = year
-            addEpisodes(DubStatus.Subbed, episodes)
+            this.tags = tags
             showStatus = status
             plot = document.select("div.desc p").text().trim()
-            this.tags = tags
             addTrailer(trailer)
+            addEpisodes(DubStatus.Subbed, episodes)
             this.recommendations = recommendations
-            addMalId(tracker?.malId)
-            addAniListId(tracker?.aniId?.toIntOrNull())
         }
     }
 
-    override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
         val document = app.get(data).document
         document.select("div#downloadb li").apmap { el ->
             el.select("a").apmap {
-                loadFixedExtractor(fixUrl(it.attr("href")) ?: return@apmap, el.select("strong").text(), "$mainUrl/", subtitleCallback, callback)
+                loadFixedExtractor(
+                    fixUrl(it.attr("href")) ?: return@apmap,
+                    el.select("strong").text(),
+                    "$mainUrl/",
+                    subtitleCallback,
+                    callback
+                )
             }
         }
         return true
     }
 
-    private suspend fun loadFixedExtractor(url: String, name: String, referer: String? = null, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
+    private suspend fun loadFixedExtractor(
+        url: String,
+        name: String,
+        referer: String? = null,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
         loadExtractor(url, referer, subtitleCallback) { link ->
             runBlocking {
                 callback.invoke(
-                    newExtractorLink(link.name, link.name, link.url, link.type) {
-                        this.referer = link.referer
-                        this.quality = name.fixQuality()
-                        this.headers = link.headers
-                        this.extractorData = link.extractorData
-                    }
+                    ExtractorLink(
+                        name = link.name,
+                        source = link.name,
+                        url = link.url,
+                        referer = link.referer,
+                        quality = name.fixQuality(),
+                        type = link.type,
+                        headers = link.headers,
+                        extractorData = link.extractorData
+                    )
                 )
             }
         }
@@ -141,7 +166,8 @@ class Samehadaku : MainAPI() {
         else -> this.filter { it.isDigit() }.toIntOrNull() ?: Qualities.Unknown.value
     }
 
-    private fun String.removeBloat(): String = this.replace(Regex("(Nonton)|(Anime)|(Subtitle\\sIndonesia)"), "").trim()
+    private fun String.removeBloat(): String =
+        this.replace(Regex("(Nonton)|(Anime)|(Subtitle\\sIndonesia)"), "").trim()
 
     private fun fixUrl(url: String?): String? {
         if (url.isNullOrEmpty()) return null
