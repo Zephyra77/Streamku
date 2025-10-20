@@ -37,16 +37,16 @@ subprojects {
     apply(plugin = "com.lagradost.cloudstream3.gradle")
 
     cloudstream {
-        setRepo(System.getenv("GITHUB_REPOSITORY") ?: "https://github.com/duro92/ExtCloud")
-        authors = listOf("duro92")
+        setRepo(System.getenv("GITHUB_REPOSITORY") ?: "https://github.com/Zephyra77/Streamku")
+        authors = listOf("Zephyra77")
     }
 
     android {
-        namespace = project.name
-        compileSdkVersion(35)
+        namespace = "com.Zephyra77"
 
         defaultConfig {
             minSdk = 21
+            compileSdkVersion(35)
             targetSdk = 35
         }
 
@@ -57,7 +57,7 @@ subprojects {
 
         tasks.withType<KotlinJvmCompile> {
             compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_17)
+                jvmTarget.set(JvmTarget.JVM_1_8)
                 freeCompilerArgs.addAll(
                     "-Xno-call-assertions",
                     "-Xno-param-assertions",
@@ -71,11 +71,13 @@ subprojects {
         val cloudstream by configurations
         val implementation by configurations
 
-        if (project.name.equals("Nunadrama", ignoreCase = true)) {
-            cloudstream("com.lagradost:cloudstream3:0.1.0") // versi lama khusus Nunadrama
+        if (project.name.equals("Auratail", ignoreCase = true) ||
+            project.name.equals("Dutamovie", ignoreCase = true) ||
+            project.name.equals("Nunadrama", ignoreCase = true)) {
+            cloudstream("com.lagradost:cloudstream3:0.1.0")
             implementation("com.github.Blatzar:NiceHttp:0.4.11")
         } else {
-            cloudstream("com.lagradost:cloudstream3:pre-release") // versi baru untuk modul lain
+            cloudstream("com.lagradost:cloudstream3:pre-release")
             implementation("com.lagradost:nicehttp:0.5.0")
         }
 
