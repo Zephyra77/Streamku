@@ -1,115 +1,65 @@
 package com.samehadaku
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.*
-import kotlinx.coroutines.runBlocking
+import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
+import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 
 class Samehadaku : MainAPI() {
-
-    override var mainUrl = "https://v1.samehadaku.how"
+    override var mainUrl = "https://samehadaku.cam"
     override var name = "Samehadaku"
     override val hasMainPage = true
     override var lang = "id"
-    override val hasDownloadSupport = true
-    override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie, TvType.OVA)
-
-    companion object {
-        fun getType(t: String): TvType {
-            return when {
-                t.contains("OVA", true) || t.contains("Special", true) -> TvType.OVA
-                t.contains("Movie", true) -> TvType.AnimeMovie
-                else -> TvType.Anime
-            }
-        }
-
-        fun getStatus(t: String): ShowStatus {
-            return when {
-                t.contains("Ongoing", true) -> ShowStatus.Ongoing
-                t.contains("Completed", true) -> ShowStatus.Completed
-                else -> ShowStatus.Completed
-            }
-        }
-    }
+    override val supportedTypes = setOf(TvType.Anime)
 
     override val mainPage = mainPageOf(
-        "daftar-anime-2/?title=&status=&type=&order=update" to "Terbaru",
-        "daftar-anime-2/?title=&status=&type=TV&order=popular" to "TV Populer",
-        "daftar-anime-2/?title=&status=&type=OVA&order=title" to "OVA",
-        "daftar-anime-2/?title=&status=&type=Movie&order=title" to "Movie"
+        "" to "Rilisan Terbaru",
+        "anime-terbaru" to "Anime Terbaru",
+        "anime-ongoing" to "Ongoing",
+        "anime-completed" to "Completed"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val document = app.get("$mainUrl/${request.data}", timeout = 50L).document
-        val home = document.select("div.animposx, article.bs").mapNotNull { it.toSearchResult() }
+        val document = app.get("$mainUrl/${request.data}/page/$page").document
+        val results = document.select("div.animposx").mapNotNull { it.toSearchResult() }
 
         return newHomePageResponse(
-            HomePageList(
-                name = request.name,
-                list = home,
-                isHorizontal = false
-            ),
+            list = HomePageList(request.name, results),
             hasNext = document.select("a.next.page-numbers").isNotEmpty()
         )
     }
 
-    private fun Element.toSearchResult(): AnimeSearchResponse? {
-        val aTag = selectFirst("a") ?: return null
-        val title = aTag.attr("title").ifEmpty { aTag.text() }
-        val href = fixUrl(aTag.attr("href")) ?: return null
-        val posterUrl = fixUrl(aTag.selectFirst("img")?.attr("src")) ?: ""
-        return AnimeSearchResponse(
-            title = title,
-            url = href,
-            apiName = this@Samehadaku.name,
-            type = TvType.Anime
-        ).apply {
+    private fun Element.toSearchResult(): SearchResponse? {
+        val title = this.selectFirst("h2 > a")?.text() ?: return null
+        val href = fixUrl(this.selectFirst("a")!!.attr("href"))
+        val posterUrl = fixUrlNull(this.selectFirst("img")?.attr("src"))
+        return newAnimeSearchResponse(title, href, TvType.Anime) {
             this.posterUrl = posterUrl
         }
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val document = app.get("$mainUrl/?s=$query").document
-        return document.select("div.animposx, article.bs").mapNotNull { it.toSearchResult() }
+        return document.select("div.animposx").mapNotNull { it.toSearchResult() }
     }
 
-    override suspend fun load(url: String): LoadResponse? {
-        val fixUrl = if (url.contains("/anime/")) url
-        else app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href") ?: return null
+    override suspend fun load(url: String): LoadResponse {
+        val document = app.get(url).document
+        val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
+        val poster = fixUrlNull(document.selectFirst("div.thumb > img")?.attr("src"))
+        val description = document.selectFirst("div.desc p")?.text()
+        val trailer = document.selectFirst("a.trailer-popup")?.attr("href")
+        val episodes = document.select("ul.episodios li a").mapNotNull { ep ->
+            val href = fixUrl(ep.attr("href"))
+            val name = ep.text()
+            newEpisode(href) { this.name = name }
+        }
 
-        val document = app.get(fixUrl).document
-        val title = document.selectFirst("h1.entry-title")?.text()?.removeBloat() ?: return null
-        val poster = document.selectFirst("div.thumb > img")?.attr("src") ?: ""
-        val tags = document.select("div.genre-info > a").map { it.text() }
-        val year = Regex("\\d{4}").find(document.text())?.value?.toIntOrNull()
-        val status = getStatus(document.selectFirst("div.spe span:contains(Status)")?.ownText() ?: "")
-        val type = getType(document.selectFirst("div.spe span:contains(Type)")?.ownText() ?: "")
-        val trailer = fixUrl(document.selectFirst("div.trailer-anime iframe")?.attr("src")) ?: ""
-
-        val episodes = document.select("div.lstepsiode.listeps ul li").mapNotNull {
-            val header = it.selectFirst("span.lchx a") ?: return@mapNotNull null
-            val num = Regex("Episode\\s?(\\d+)").find(header.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
-            val link = fixUrl(header.attr("href")) ?: return@mapNotNull null
-            Episode(link, episode = num)
-        }.reversed()
-
-        val recommendations = document.select("aside#sidebar ul li").mapNotNull { it.toSearchResult() }
-
-        return AnimeLoadResponse(
-            name = title,
-            url = url,
-            type = type
-        ).apply {
-            engName = title
-            posterUrl = poster
-            backgroundPosterUrl = null
-            this.year = year
-            this.tags = tags
-            showStatus = status
-            plot = document.select("div.desc p").text().trim()
+        return newAnimeLoadResponse(title, url, this.name, TvType.Anime) {
+            this.posterUrl = poster
+            this.plot = description
             addTrailer(trailer)
             addEpisodes(DubStatus.Subbed, episodes)
-            this.recommendations = recommendations
         }
     }
 
@@ -120,57 +70,8 @@ class Samehadaku : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-        document.select("div#downloadb li").apmap { el ->
-            el.select("a").apmap {
-                loadFixedExtractor(
-                    fixUrl(it.attr("href")) ?: return@apmap,
-                    el.select("strong").text(),
-                    "$mainUrl/",
-                    subtitleCallback,
-                    callback
-                )
-            }
-        }
+        val iframe = document.selectFirst("iframe")?.attr("src") ?: return false
+        loadExtractor(fixUrl(iframe), mainUrl, subtitleCallback, callback)
         return true
-    }
-
-    private suspend fun loadFixedExtractor(
-        url: String,
-        name: String,
-        referer: String? = null,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        loadExtractor(url, referer, subtitleCallback) { link ->
-            runBlocking {
-                callback.invoke(
-                    ExtractorLink(
-                        name = link.name,
-                        source = link.name,
-                        url = link.url,
-                        referer = link.referer,
-                        quality = name.fixQuality(),
-                        type = link.type,
-                        headers = link.headers,
-                        extractorData = link.extractorData
-                    )
-                )
-            }
-        }
-    }
-
-    private fun String.fixQuality(): Int = when (this.uppercase()) {
-        "4K" -> Qualities.P2160.value
-        "FULLHD" -> Qualities.P1080.value
-        "MP4HD" -> Qualities.P720.value
-        else -> this.filter { it.isDigit() }.toIntOrNull() ?: Qualities.Unknown.value
-    }
-
-    private fun String.removeBloat(): String =
-        this.replace(Regex("(Nonton)|(Anime)|(Subtitle\\sIndonesia)"), "").trim()
-
-    private fun fixUrl(url: String?): String? {
-        if (url.isNullOrEmpty()) return null
-        return if (url.startsWith("http")) url else mainUrl.trimEnd('/') + "/" + url.trimStart('/')
     }
 }
