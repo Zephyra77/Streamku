@@ -1,0 +1,9 @@
+{
+    "name": "Streamku-Zephyra77",
+    "description": "Cloudstream extensions",
+    "iconUrl": "https://raw.githubusercontent.com/Zephyra77/Foto/main/Zephyra77.png",
+    "manifestVersion": 1,
+    "pluginLists": [
+      "https://raw.githubusercontent.com/Zephyra77/Streamku/refs/heads/builds/plugins.json"
+    ]
+}
