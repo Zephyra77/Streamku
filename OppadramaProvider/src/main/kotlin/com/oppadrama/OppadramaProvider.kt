@@ -126,19 +126,8 @@ class OppadramaProvider : MainAPI() {
 
         for (src in sources) {
             loadExtractor(src, mainUrl, subtitleCallback, callback)
-
-
-        sources.apmap {
-            loadExtractor(it, mainUrl, subtitleCallback, callback)
-
         }
-        return sources.isNotEmpty()
-    }
-}
 
-        for (src in sources) {
-            loadExtractor(src, mainUrl, subtitleCallback, callback)
-        }
         return sources.isNotEmpty()
     }
 }
