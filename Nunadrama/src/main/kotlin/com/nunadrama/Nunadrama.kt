@@ -125,7 +125,6 @@ class Nunadrama : MainAPI() {
                     this.episode = epNum
                 }
             }
-
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
