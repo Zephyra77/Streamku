@@ -31,7 +31,7 @@ class Nunadrama : MainAPI() {
             "genre/c-drama/page/%d/" to "China Series",
             "genre/thai-drama/page/%d/" to "Thailand Series",
             "genre/koleksi-series/page/%d/" to "Other Series",
-            "genre/variety-show/page/%d" to "Variety Show"
+            "genre/variety-show/page/%d/" to "Variety Show"
         )
     }
 
@@ -41,13 +41,11 @@ class Nunadrama : MainAPI() {
     private suspend fun post(url: String, data: Map<String, String>): NiceResponse =
         Requests.post(url, data = data, interceptor = interceptor)
 
-    private fun Element.getImageAttr(): String? {
-        return when {
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            else -> attr("abs:src")
-        }
+    private fun Element.getImageAttr(): String? = when {
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        else -> attr("abs:src")
     }
 
     private fun Element?.getIframeAttr(): String? {
@@ -173,7 +171,7 @@ class Nunadrama : MainAPI() {
         } else {
             val tabs = document.select("div.tab-content-ajax")
             for (ele in tabs) {
-                val resp = post("$directUrl/wp-admin/admin-ajax.php", data = mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to id))
+                val resp = post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to id))
                 val iframe = resp.document.selectFirst("iframe")
                 val src = iframe?.attr("src")?.let { httpsify(it) } ?: continue
                 loadExtractor(src, "$directUrl/", subtitleCallback, callback)
@@ -200,12 +198,10 @@ class Nunadrama : MainAPI() {
         }
     }
 
-    private fun getImageAttrFromElement(el: Element): String? {
-        return when {
-            el.hasAttr("data-src") -> el.attr("abs:data-src")
-            el.hasAttr("data-lazy-src") -> el.attr("abs:data-lazy-src")
-            el.hasAttr("srcset") -> el.attr("abs:srcset").substringBefore(" ")
-            else -> el.attr("abs:src")
-        }
+    private fun getImageAttrFromElement(el: Element): String? = when {
+        el.hasAttr("data-src") -> el.attr("abs:data-src")
+        el.hasAttr("data-lazy-src") -> el.attr("abs:data-lazy-src")
+        el.hasAttr("srcset") -> el.attr("abs:srcset").substringBefore(" ")
+        else -> el.attr("abs:src")
     }
 }
