@@ -33,7 +33,7 @@ class Nunadrama : MainAPI() {
         )
     }
 
-    private suspend fun request(url: String, ref: String? = null) = app.get(url)
+    private suspend fun request(url: String) = app.get(url)
     private suspend fun post(url: String, data: Map<String, String>) = app.post(url, data)
 
     private fun Element.getImageAttr(): String {
@@ -105,7 +105,6 @@ class Nunadrama : MainAPI() {
         if (isSeries) {
             val epsEls = mutableListOf<Element>()
             epsEls += document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a")
-
             if (epsEls.isEmpty()) {
                 val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
                 if (!postId.isNullOrEmpty()) {
@@ -120,11 +119,12 @@ class Nunadrama : MainAPI() {
                 val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
                 newEpisode {
-                    this.name = name
                     this.url = href
+                    this.name = name
                     this.episode = epNum
                 }
             }
+
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
