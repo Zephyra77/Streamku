@@ -31,7 +31,7 @@ class Nunadrama : MainAPI() {
             "genre/c-drama/page/%d/" to "China Series",
             "genre/thai-drama/page/%d/" to "Thailand Series",
             "genre/koleksi-series/page/%d/" to "Other Series",
-            "genre/variety-show/page/%d/" to "Variety Show"
+            "genre/variety-show/page/%d" to "Variety Show"
         )
     }
 
@@ -173,7 +173,7 @@ class Nunadrama : MainAPI() {
         } else {
             val tabs = document.select("div.tab-content-ajax")
             for (ele in tabs) {
-                val resp = post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to id))
+                val resp = post("$directUrl/wp-admin/admin-ajax.php", data = mapOf("action" to "muvipro_player_content", "tab" to ele.attr("id"), "post_id" to id))
                 val iframe = resp.document.selectFirst("iframe")
                 val src = iframe?.attr("src")?.let { httpsify(it) } ?: continue
                 loadExtractor(src, "$directUrl/", subtitleCallback, callback)
