@@ -65,10 +65,7 @@ class Nunadrama : MainAPI() {
         val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr())?.fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
         return if (quality.isEmpty()) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
-                this.posterUrl = poster
-                this.name = "$title (Series)"
-            }
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = poster }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 this.posterUrl = poster
@@ -108,13 +105,13 @@ class Nunadrama : MainAPI() {
         val isSeries = url.contains("/tv/")
         if (isSeries) {
             val epsEls = mutableListOf<Element>()
-            epsEls += document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a")
+            epsEls.addAll(document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a"))
 
             if (epsEls.isEmpty()) {
                 val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
                 if (!postId.isNullOrEmpty()) {
                     val ajax = post("$baseUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId))
-                    epsEls += ajax.document.select("a")
+                    epsEls.addAll(ajax.document.select("a"))
                 }
             }
 
@@ -169,7 +166,6 @@ class Nunadrama : MainAPI() {
                     ?.getIframeAttr()
                     ?.let { httpsify(it) }
                     ?: return@amap
-
                 loadExtractor(iframe, getBaseUrl(data), subtitleCallback, callback)
             }
         } else {
