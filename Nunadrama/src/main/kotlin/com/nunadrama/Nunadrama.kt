@@ -253,7 +253,7 @@ override suspend fun loadLinks(
             val quality = detectQuality(link)
 
             loadExtractor(link, data, subtitleCallback) { ext ->
-                val labeled = ExtractorLink(
+                val labeled = newExtractorLink(
                     name = hostName,
                     source = ext.source,
                     url = ext.url,
