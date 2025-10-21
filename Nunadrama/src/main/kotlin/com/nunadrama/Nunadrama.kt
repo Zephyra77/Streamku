@@ -234,7 +234,6 @@ override suspend fun loadLinks(
     sortedIframes.forEach { link ->
         try {
             loadExtractor(link, data, subtitleCallback) { ext ->
-                // Hanya pakai parameter minimal yang kompatibel
                 val labeled = newExtractorLink(
                     name = ext.source,
                     source = ext.source,
@@ -246,4 +245,4 @@ override suspend fun loadLinks(
     }
 
     true
-} 
+} // <- pastikan ini menutup coroutineScope dan fungsi loadLinks
