@@ -2,7 +2,6 @@ package com.klikxxi
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -43,8 +42,7 @@ open class Klikxxi : MainAPI() {
         val posterUrl = selectFirst("img")?.getImageAttr()?.fixImageQuality()
         val quality = selectFirst("span.gmr-quality-item")?.text()?.trim()
             ?: select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
-        val isSeries = selectFirst(".gmr-posttype-item")?.text()?.contains("TV", true) == true ||
-                href.contains("/series/") || href.contains("/tv/")
+        val isSeries = selectFirst(".gmr-posttype-item")?.text()?.contains("TV", true) == true || href.contains("/series/") || href.contains("/tv/")
 
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
@@ -70,8 +68,7 @@ open class Klikxxi : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val document = app.get("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv").document
-        return document.select("article.item, div.gmr-item, div.item-movie, div.item-series")
-            .mapNotNull { it.toSearchResult() }
+        return document.select("article.item, div.gmr-item, div.item-movie, div.item-series").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
@@ -90,8 +87,7 @@ open class Klikxxi : MainAPI() {
         val tags = document.select("div.gmr-moviedata strong:contains(Genre:) > a").map { it.text() }
         val year = document.select("div.gmr-moviedata strong:contains(Year:) > a").text().trim().toIntOrNull()
         val trailer = document.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
-        val scoreDouble = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
-        val score: Score? = scoreDouble?.let { Score.from(it) }
+        val scoreValue = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val actors = document.select("div.gmr-moviedata span[itemprop=actors] a").map { it.text() }.takeIf { it.isNotEmpty() }
         val recommendations = document.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
 
@@ -118,13 +114,15 @@ open class Klikxxi : MainAPI() {
         val episodes = allEpisodes.sortedWith(compareBy({ it.season }, { it.episode }))
         val tvType = if (episodes.isNotEmpty() || url.contains("/series/") || url.contains("/tv/")) TvType.TvSeries else TvType.Movie
 
+        val score: Score? = scoreValue?.let { Score.from(it, 10) }
+
         return if (tvType == TvType.TvSeries) {
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                addScore(score)
+                this.score = score
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
@@ -135,7 +133,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                addScore(score)
+                this.score = score
                 addActors(actors)
                 addTrailer(trailer)
                 this.recommendations = recommendations
