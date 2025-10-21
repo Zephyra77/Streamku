@@ -30,6 +30,7 @@ open class Klikxxi : MainAPI() {
         val document = app.get(fixUrl(url)).document
         val list = document.select("article.item, div.gmr-item, div.item-movie, div.item-series")
             .mapNotNull { it.toSearchResult() }
+
         return newHomePageResponse(request.name, list)
     }
 
@@ -43,6 +44,7 @@ open class Klikxxi : MainAPI() {
         val quality = selectFirst("span.gmr-quality-item")?.text()?.trim()
             ?: select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
         val isSeries = selectFirst(".gmr-posttype-item")?.text()?.contains("TV", true) == true || href.contains("/series/") || href.contains("/tv/")
+
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                 this.posterUrl = posterUrl
@@ -119,7 +121,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                this.scoreValue = rating
+                this.rating = rating?.let { Score.fromDouble(it) }
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
@@ -130,7 +132,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                this.scoreValue = rating
+                this.rating = rating?.let { Score.fromDouble(it) }
                 addActors(actors)
                 addTrailer(trailer)
                 this.recommendations = recommendations
