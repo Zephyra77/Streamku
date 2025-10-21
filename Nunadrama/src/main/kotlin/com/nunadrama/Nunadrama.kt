@@ -59,6 +59,12 @@ class Nunadrama : MainAPI() {
         return URI(url).let { "${it.scheme}://${it.host}" }
     }
 
+    private fun isPlaceholderText(t: String?): Boolean {
+        if (t.isNullOrBlank()) return true
+        val low = t.trim().lowercase()
+        return low.contains("segera hadir") || low.contains("coming soon") || low.contains("segera") || low.contains("coming")
+    }
+
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h2.entry-title > a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
@@ -92,11 +98,22 @@ class Nunadrama : MainAPI() {
         val resp = request(url)
         val baseUrl = getBaseUrl(resp.url)
         val document = resp.document
-        val title = document.selectFirst("h1.entry-title")?.text()?.substringBefore("Season")?.substringBefore("Episode")?.trim().orEmpty()
+
+        val title = document.selectFirst("h1.entry-title")
+            ?.text()
+            ?.substringBefore("Season")
+            ?.substringBefore("Episode")
+            ?.substringBefore("Eps")
+            ?.trim()
+            .orEmpty()
+
         val poster = fixUrlNull(document.selectFirst("figure.pull-left > img")?.getImageAttr())?.fixImageQuality()
         val tags = document.select("div.gmr-moviedata a").map { it.text() }
         val year = document.select("div.gmr-moviedata strong:contains(Year:) > a").text().trim().toIntOrNull()
-        val description = document.selectFirst("div[itemprop=description] > p")?.text()?.trim()
+        val description = document.selectFirst("div[itemprop=description] > p")?.text()
+            ?: document.selectFirst("div.entry-content p")?.text()
+            ?: document.selectFirst("div.gmr-moviedata")?.text()
+            ?: "Plot Tidak Ditemukan"
         val trailer = document.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
         val rating = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.trim()
         val actors = document.select("div.gmr-moviedata span[itemprop=actors]").map { it.select("a").text() }
@@ -105,8 +122,7 @@ class Nunadrama : MainAPI() {
         val isSeries = url.contains("/tv/")
         if (isSeries) {
             val epsEls = mutableListOf<Element>()
-            epsEls.addAll(document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a"))
-
+            epsEls.addAll(document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a, ul.episodios li a, div.list-episode a"))
             if (epsEls.isEmpty()) {
                 val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
                 if (!postId.isNullOrEmpty()) {
@@ -114,18 +130,43 @@ class Nunadrama : MainAPI() {
                     epsEls.addAll(ajax.document.select("a"))
                 }
             }
+            if (epsEls.isEmpty()) {
+                val boxEls = document.select("div.box")
+                if (boxEls.isNotEmpty()) {
+                    boxEls.forEach { box ->
+                        val p = box.selectFirst("p:containsOwn(Episode)")
+                        val epText = p?.text()
+                        val num = epText?.substringAfter("Episode ")?.filter { it.isDigit() }?.toIntOrNull()
+                        val possibleHref = box.selectFirst("a")?.attr("href") ?: "$url?boxeps-${num ?: 0}"
+                        if (!possibleHref.isNullOrBlank()) {
+                            epsEls.add(Element("a").attr("href", possibleHref).text(epText ?: "Episode ${num ?: 0}"))
+                        }
+                    }
+                }
+            }
 
             val episodes = epsEls.mapNotNull { eps ->
-                val href = eps.attr("href").takeIf { it.isNotBlank() }?.let { fixUrl(it) } ?: return@mapNotNull null
+                val rawHref = eps.attr("href").takeIf { it.isNotBlank() && it != "#" } ?: return@mapNotNull null
+                if (rawHref.contains("coming-soon", true)) return@mapNotNull null
+                val href = fixUrl(rawHref)
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
+                if (isPlaceholderText(name)) return@mapNotNull null
                 val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                    ?: Regex("EPISODE\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
                 newEpisode(href) {
-                    this.name = "Sub Ep ${epNum ?: 1}: $name"
+                    this.name = name
                     this.episode = epNum
                 }
             }
 
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            val safeEpisodes = if (episodes.isEmpty()) {
+                listOf(newEpisode(url) {
+                    this.name = "Segera hadir..."
+                    this.episode = 0
+                })
+            } else episodes
+
+            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, safeEpisodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = description
@@ -159,17 +200,20 @@ class Nunadrama : MainAPI() {
         val id = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
 
         if (id.isNullOrEmpty()) {
-            document.select("ul.muvipro-player-tabs li a").amap { ele ->
-                val iframe = app.get(fixUrl(ele.attr("href")))
-                    .document
-                    .selectFirst("div.gmr-embed-responsive iframe")
-                    ?.getIframeAttr()
-                    ?.let { httpsify(it) }
-                    ?: return@amap
+            document.select("ul.muvipro-player-tabs li a").forEach { ele ->
+                val iframe = try {
+                    app.get(fixUrl(ele.attr("href")))
+                        .document
+                        .selectFirst("div.gmr-embed-responsive iframe")
+                        ?.getIframeAttr()
+                        ?.let { httpsify(it) }
+                } catch (t: Throwable) {
+                    null
+                } ?: return@forEach
                 loadExtractor(iframe, getBaseUrl(data), subtitleCallback, callback)
             }
         } else {
-            document.select("div.tab-content-ajax").amap { ele ->
+            document.select("div.tab-content-ajax").forEach { ele ->
                 val server = post(
                     "${getBaseUrl(data)}/wp-admin/admin-ajax.php",
                     mapOf(
@@ -178,10 +222,10 @@ class Nunadrama : MainAPI() {
                         "post_id" to "$id"
                     )
                 ).document
-                    .select("iframe")
-                    .attr("src")
-                    .let { httpsify(it) }
-
+                    .selectFirst("iframe")
+                    ?.attr("src")
+                    ?.let { httpsify(it) }
+                    ?: return@forEach
                 loadExtractor(server, getBaseUrl(data), subtitleCallback, callback)
             }
         }
