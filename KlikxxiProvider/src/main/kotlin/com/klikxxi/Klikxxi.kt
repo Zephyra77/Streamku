@@ -30,7 +30,6 @@ open class Klikxxi : MainAPI() {
         val document = app.get(fixUrl(url)).document
         val list = document.select("article.item, div.gmr-item, div.item-movie, div.item-series")
             .mapNotNull { it.toSearchResult() }
-
         return newHomePageResponse(request.name, list)
     }
 
@@ -88,7 +87,7 @@ open class Klikxxi : MainAPI() {
         val tags = document.select("div.gmr-moviedata strong:contains(Genre:) > a").map { it.text() }
         val year = document.select("div.gmr-moviedata strong:contains(Year:) > a").text().trim().toIntOrNull()
         val trailer = document.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
-        val rating = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
+        val scoreValue = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val actors = document.select("div.gmr-moviedata span[itemprop=actors] a").map { it.text() }.takeIf { it.isNotEmpty() }
         val recommendations = document.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
 
@@ -121,7 +120,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                this.score = rating?.let { Score(it) }
+                this.score = scoreValue
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
@@ -132,7 +131,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                this.score = rating?.let { Score(it) }
+                this.score = scoreValue
                 addActors(actors)
                 addTrailer(trailer)
                 this.recommendations = recommendations
