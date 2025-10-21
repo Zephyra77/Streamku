@@ -4,10 +4,10 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
+import com.lagradost.cloudstream3.utils.httpsify
+import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.httpsify
 import org.jsoup.nodes.Element
 import java.net.URI
 import kotlin.text.RegexOption
@@ -231,12 +231,6 @@ class Nunadrama : MainAPI() {
             if (idx == -1) priorityHosts.size else idx
         }
 
-        fun detectQuality(url: String): Int = when {
-            url.contains("1080", true) || url.contains("full", true) -> 1080
-            url.contains("720", true) || url.contains("hd", true) -> 720
-            else -> 480
-        }
-
         fun detectHost(url: String): String = when {
             url.contains("streamwish", true) -> "StreamWish"
             url.contains("filemoon", true) -> "FileMoon"
@@ -247,9 +241,15 @@ class Nunadrama : MainAPI() {
             else -> "Unknown"
         }
 
+        fun detectQuality(url: String): Int = when {
+            url.contains("1080", true) || url.contains("full", true) -> 1080
+            url.contains("720", true) || url.contains("hd", true) -> 720
+            else -> 480
+        }
+
         val extractedLinks = mutableListOf<ExtractorLink>()
 
-        sortedIframes.forEach { link ->
+        for (link in sortedIframes) {
             try {
                 val hostName = detectHost(link)
                 val quality = detectQuality(link)
@@ -259,8 +259,7 @@ class Nunadrama : MainAPI() {
                         name = hostName,
                         source = ext.source,
                         url = ext.url,
-                        referer = ext.referer,
-                        quality = quality,
+                        extractorData = data,
                         isM3u8 = ext.isM3u8,
                         headers = ext.headers
                     )
