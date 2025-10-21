@@ -172,7 +172,7 @@ class Nunadrama : MainAPI() {
         private const val CACHE_TTL = 5 * 60 * 1000L
     }
 
-    override suspend fun loadLinks(
+override suspend fun loadLinks(
     data: String,
     isCasting: Boolean,
     subtitleCallback: (SubtitleFile) -> Unit,
@@ -237,10 +237,7 @@ class Nunadrama : MainAPI() {
                 val labeled = newExtractorLink(
                     name = ext.source,
                     source = ext.source,
-                    url = ext.url,
-                    extractorData = data,
-                    isM3u8 = ext.isM3u8,
-                    headers = ext.headers
+                    url = ext.url
                 )
                 callback(labeled)
             }
@@ -248,4 +245,4 @@ class Nunadrama : MainAPI() {
     }
 
     true
-    }
+}
