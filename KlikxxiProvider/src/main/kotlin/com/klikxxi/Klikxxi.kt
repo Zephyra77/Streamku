@@ -30,7 +30,6 @@ open class Klikxxi : MainAPI() {
         val document = app.get(fixUrl(url)).document
         val list = document.select("article.item, div.gmr-item, div.item-movie, div.item-series")
             .mapNotNull { it.toSearchResult() }
-
         return newHomePageResponse(request.name, list)
     }
 
@@ -44,7 +43,6 @@ open class Klikxxi : MainAPI() {
         val quality = selectFirst("span.gmr-quality-item")?.text()?.trim()
             ?: select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
         val isSeries = selectFirst(".gmr-posttype-item")?.text()?.contains("TV", true) == true || href.contains("/series/") || href.contains("/tv/")
-
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
                 this.posterUrl = posterUrl
@@ -88,7 +86,7 @@ open class Klikxxi : MainAPI() {
         val tags = document.select("div.gmr-moviedata strong:contains(Genre:) > a").map { it.text() }
         val year = document.select("div.gmr-moviedata strong:contains(Year:) > a").text().trim().toIntOrNull()
         val trailer = document.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
-        val rating = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()?.toInt()
+        val rating = document.selectFirst("div.gmr-meta-rating > span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val actors = document.select("div.gmr-moviedata span[itemprop=actors] a").map { it.text() }.takeIf { it.isNotEmpty() }
         val recommendations = document.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
 
@@ -121,7 +119,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                this.score = rating?.let { Score(it.toDouble()) }  
+                this.score = rating
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
@@ -132,7 +130,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                this.score = rating?.let { Score(it.toDouble()) }  
+                this.score = rating
                 addActors(actors)
                 addTrailer(trailer)
                 this.recommendations = recommendations
