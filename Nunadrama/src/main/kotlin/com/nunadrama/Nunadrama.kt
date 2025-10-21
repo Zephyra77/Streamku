@@ -173,80 +173,79 @@ class Nunadrama : MainAPI() {
     }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean = coroutineScope {
-        val now = System.currentTimeMillis()
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean = coroutineScope {
+    val now = System.currentTimeMillis()
 
-        linkCache[data]?.let { (timestamp, links) ->
-            if (now - timestamp < CACHE_TTL) {
-                links.forEach(callback)
-                return@coroutineScope true
-            } else {
-                linkCache.remove(data)
-            }
+    linkCache[data]?.let { (timestamp, links) ->
+        if (now - timestamp < CACHE_TTL) {
+            links.forEach(callback)
+            return@coroutineScope true
+        } else {
+            linkCache.remove(data)
         }
+    }
 
-        val doc = app.get(data).document
-        val base = getBaseUrl(data)
-        val foundIframes = mutableSetOf<String>()
+    val doc = app.get(data).document
+    val base = getBaseUrl(data)
+    val foundIframes = mutableSetOf<String>()
 
-        doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
-            val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
-            val fixed = httpsify(src ?: "")
+    doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
+        val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
+        val fixed = httpsify(src ?: "")
+        if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
+            foundIframes.add(fixed)
+    }
+
+    val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+    if (!postId.isNullOrEmpty()) {
+        val ajax = app.post(
+            "$base/wp-admin/admin-ajax.php",
+            mapOf(
+                "action" to "muvipro_player_content",
+                "tab" to "server",
+                "post_id" to postId
+            )
+        ).document
+
+        ajax.select("iframe").forEach {
+            val src = it.attr("src")
+            val fixed = httpsify(src)
             if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
                 foundIframes.add(fixed)
         }
-
-        val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
-        if (!postId.isNullOrEmpty()) {
-            val ajax = app.post(
-                "$base/wp-admin/admin-ajax.php",
-                mapOf(
-                    "action" to "muvipro_player_content",
-                    "tab" to "server",
-                    "post_id" to postId
-                )
-            ).document
-
-            ajax.select("iframe").forEach {
-                val src = it.attr("src")
-                val fixed = httpsify(src)
-                if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
-                    foundIframes.add(fixed)
-            }
-        }
-
-        doc.select("ul.gmr-download-list li a").forEach { linkEl ->
-            val dlUrl = linkEl.attr("href")
-            if (dlUrl.isNotBlank() && !dlUrl.contains("coming-soon", true))
-                foundIframes.add(httpsify(dlUrl))
-        }
-
-        val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
-        val sortedIframes = foundIframes.sortedBy { link ->
-            val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
-            if (idx == -1) priorityHosts.size else idx
-        }
-
-        sortedIframes.forEach { link ->
-            try {
-                loadExtractor(link, data, subtitleCallback) { ext ->
-                    val labeled = newExtractorLink(
-                        name = ext.source,
-                        source = ext.source,
-                        url = ext.url,
-                        extractorData = data,
-                        isM3u8 = ext.isM3u8,
-                        headers = ext.headers
-                    )
-                    callback(labeled)
-                }
-            } catch (_: Exception) {}
-        }
-
-        true
     }
-}
+
+    doc.select("ul.gmr-download-list li a").forEach { linkEl ->
+        val dlUrl = linkEl.attr("href")
+        if (dlUrl.isNotBlank() && !dlUrl.contains("coming-soon", true))
+            foundIframes.add(httpsify(dlUrl))
+    }
+
+    val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
+    val sortedIframes = foundIframes.sortedBy { link ->
+        val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
+        if (idx == -1) priorityHosts.size else idx
+    }
+
+    sortedIframes.forEach { link ->
+        try {
+            loadExtractor(link, data, subtitleCallback) { ext ->
+                val labeled = newExtractorLink(
+                    name = ext.source,
+                    source = ext.source,
+                    url = ext.url,
+                    extractorData = data,
+                    isM3u8 = ext.isM3u8,
+                    headers = ext.headers
+                )
+                callback(labeled)
+            }
+        } catch (_: Exception) {}
+    }
+
+    true
+    }
