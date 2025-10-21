@@ -4,10 +4,10 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.lagradost.cloudstream3.utils.httpsify
-import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.httpsify
 import org.jsoup.nodes.Element
 import java.net.URI
 import kotlin.text.RegexOption
@@ -123,47 +123,43 @@ class Nunadrama : MainAPI() {
                 addActors(actors)
                 addTrailer(trailer)
             }
-        } else {
-            val epsEls = mutableListOf<Element>()
-            epsEls.addAll(document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a, ul.episodios li a, div.list-episode a"))
+        }
 
-            if (epsEls.isEmpty()) {
-                val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
-                if (!postId.isNullOrEmpty()) {
-                    val ajax = post("$baseUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId))
-                    epsEls.addAll(ajax.document.select("a"))
-                }
+        val epsEls = mutableListOf<Element>()
+        epsEls.addAll(document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a, ul.episodios li a, div.list-episode a"))
+        if (epsEls.isEmpty()) {
+            val postId = document.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+            if (!postId.isNullOrEmpty()) {
+                val ajax = post("$baseUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId))
+                epsEls.addAll(ajax.document.select("a"))
             }
+        }
 
-            val episodes = epsEls.mapNotNull { eps ->
-                val rawHref = eps.attr("href").takeIf { it.isNotBlank() && it != "#" } ?: return@mapNotNull null
-                if (rawHref.contains("coming-soon", true)) return@mapNotNull null
-                val href = fixUrl(rawHref)
-                val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
-                if (isPlaceholderText(name)) return@mapNotNull null
-                val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                newEpisode(href) {
-                    this.name = name
-                    this.episode = epNum
-                }
+        val episodes = epsEls.mapNotNull { eps ->
+            val rawHref = eps.attr("href").takeIf { it.isNotBlank() && it != "#" } ?: return@mapNotNull null
+            if (rawHref.contains("coming-soon", true)) return@mapNotNull null
+            val href = fixUrl(rawHref)
+            val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
+            if (isPlaceholderText(name)) return@mapNotNull null
+            val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+            newEpisode(href) {
+                this.name = name
+                this.episode = epNum
             }
+        }
 
-            val safeEpisodes = if (episodes.isEmpty()) {
-                listOf(newEpisode(url) {
-                    this.name = "Segera hadir..."
-                    this.episode = 0
-                })
-            } else episodes
+        val safeEpisodes = if (episodes.isEmpty()) {
+            listOf(newEpisode(url) { this.name = "Segera hadir..."; this.episode = 0 })
+        } else episodes
 
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, safeEpisodes) {
-                this.posterUrl = poster
-                this.year = year
-                this.plot = description
-                this.tags = tags
-                addScore(rating)
-                addActors(actors)
-                addTrailer(trailer)
-            }
+        return newTvSeriesLoadResponse(title, url, TvType.TvSeries, safeEpisodes) {
+            this.posterUrl = poster
+            this.year = year
+            this.plot = description
+            this.tags = tags
+            addScore(rating)
+            addActors(actors)
+            addTrailer(trailer)
         }
     }
 
@@ -177,16 +173,14 @@ class Nunadrama : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean {
+    ): Boolean = coroutineScope {
         val now = System.currentTimeMillis()
 
         linkCache[data]?.let { (timestamp, links) ->
             if (now - timestamp < CACHE_TTL) {
                 links.forEach(callback)
-                return true
-            } else {
-                linkCache.remove(data)
-            }
+                return@coroutineScope true
+            } else linkCache.remove(data)
         }
 
         val doc = app.get(data).document
@@ -196,13 +190,12 @@ class Nunadrama : MainAPI() {
         doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
             val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
             val fixed = httpsify(src ?: "")
-            if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
-                foundIframes.add(fixed)
+            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundIframes.add(fixed)
         }
 
         val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
         if (!postId.isNullOrEmpty()) {
-            val ajax = app.post(
+            val ajax = post(
                 "$base/wp-admin/admin-ajax.php",
                 data = mapOf(
                     "action" to "muvipro_player_content",
@@ -214,8 +207,7 @@ class Nunadrama : MainAPI() {
             ajax.select("iframe").forEach {
                 val src = it.attr("src")
                 val fixed = httpsify(src)
-                if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
-                    foundIframes.add(fixed)
+                if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundIframes.add(fixed)
             }
         }
 
@@ -231,6 +223,12 @@ class Nunadrama : MainAPI() {
             if (idx == -1) priorityHosts.size else idx
         }
 
+        fun detectQuality(url: String): Int = when {
+            url.contains("1080", true) || url.contains("full", true) -> 1080
+            url.contains("720", true) || url.contains("hd", true) -> 720
+            else -> 480
+        }
+
         fun detectHost(url: String): String = when {
             url.contains("streamwish", true) -> "StreamWish"
             url.contains("filemoon", true) -> "FileMoon"
@@ -241,15 +239,9 @@ class Nunadrama : MainAPI() {
             else -> "Unknown"
         }
 
-        fun detectQuality(url: String): Int = when {
-            url.contains("1080", true) || url.contains("full", true) -> 1080
-            url.contains("720", true) || url.contains("hd", true) -> 720
-            else -> 480
-        }
-
         val extractedLinks = mutableListOf<ExtractorLink>()
 
-        for (link in sortedIframes) {
+        sortedIframes.forEach { link ->
             try {
                 val hostName = detectHost(link)
                 val quality = detectQuality(link)
@@ -259,9 +251,10 @@ class Nunadrama : MainAPI() {
                         name = hostName,
                         source = ext.source,
                         url = ext.url,
-                        extractorData = data,
+                        quality = quality,
                         isM3u8 = ext.isM3u8,
-                        headers = ext.headers
+                        headers = ext.headers,
+                        extractorData = ext.extractorData
                     )
                     extractedLinks.add(labeled)
                     callback(labeled)
@@ -273,6 +266,6 @@ class Nunadrama : MainAPI() {
             linkCache[data] = now to extractedLinks
         }
 
-        return extractedLinks.isNotEmpty()
+        return@coroutineScope extractedLinks.isNotEmpty()
     }
 }
