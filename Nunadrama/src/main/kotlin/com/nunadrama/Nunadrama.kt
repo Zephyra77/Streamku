@@ -4,8 +4,10 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.lagradost.cloudstream3.utils.httpsify
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.httpsify
 import org.jsoup.nodes.Element
 import java.net.URI
 import kotlin.text.RegexOption
@@ -202,7 +204,11 @@ class Nunadrama : MainAPI() {
         if (!postId.isNullOrEmpty()) {
             val ajax = app.post(
                 "$base/wp-admin/admin-ajax.php",
-                data = mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
+                data = mapOf(
+                    "action" to "muvipro_player_content",
+                    "tab" to "server",
+                    "post_id" to postId
+                )
             ).document
 
             ajax.select("iframe").forEach {
