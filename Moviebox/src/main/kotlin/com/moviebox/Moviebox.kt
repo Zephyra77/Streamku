@@ -17,7 +17,7 @@ class Moviebox : MainAPI() {
     override var name = "Moviebox"
     override val hasMainPage = true
     override val hasQuickSearch = true
-    override var lang = "id"
+    override var lang = "en"
     override val supportedTypes = setOf(
         TvType.Movie,
         TvType.TvSeries,

@@ -1,4 +1,4 @@
-package com.horis.cloudstreamplugins
+ package com.horis.cloudstreamplugins
 
 import com.horis.cloudstreamplugins.entities.EpisodesData
 import com.horis.cloudstreamplugins.entities.PlayList
