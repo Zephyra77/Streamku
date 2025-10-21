@@ -170,103 +170,107 @@ class Nunadrama : MainAPI() {
         private const val CACHE_TTL = 5 * 60 * 1000L
     }
 
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val now = System.currentTimeMillis()
+override suspend fun loadLinks(
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean {
+    val now = System.currentTimeMillis()
 
-        linkCache[data]?.let { (timestamp, links) ->
-            if (now - timestamp < CACHE_TTL) {
-                links.forEach(callback)
-                return true
-            } else {
-                linkCache.remove(data)
-            }
+    linkCache[data]?.let { (timestamp, links) ->
+        if (now - timestamp < CACHE_TTL) {
+            links.forEach(callback)
+            return true
+        } else {
+            linkCache.remove(data)
         }
+    }
 
-        val doc = app.get(data).document
-        val base = getBaseUrl(data)
-        val foundIframes = mutableSetOf<String>()
+    val doc = app.get(data).document
+    val base = getBaseUrl(data)
+    val foundIframes = mutableSetOf<String>()
 
-        doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
-            val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
-            val fixed = httpsify(src ?: "")
+    doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
+        val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
+        val fixed = httpsify(src ?: "")
+        if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
+            foundIframes.add(fixed)
+    }
+
+    val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+    if (!postId.isNullOrEmpty()) {
+        val ajax = app.post(
+            "$base/wp-admin/admin-ajax.php",
+            data = mapOf(
+                "action" to "muvipro_player_content",
+                "tab" to "server",
+                "post_id" to postId
+            )
+        ).document
+
+        ajax.select("iframe").forEach {
+            val src = it.attr("src")
+            val fixed = httpsify(src)
             if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
                 foundIframes.add(fixed)
         }
-
-        val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
-        if (!postId.isNullOrEmpty()) {
-            val ajax = app.post(
-                "$base/wp-admin/admin-ajax.php",
-                data = mapOf(
-                    "action" to "muvipro_player_content",
-                    "tab" to "server",
-                    "post_id" to postId
-                )
-            ).document
-
-            ajax.select("iframe").forEach {
-                val src = it.attr("src")
-                val fixed = httpsify(src)
-                if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
-                    foundIframes.add(fixed)
-            }
-        }
-
-        doc.select("ul.gmr-download-list li a").forEach { linkEl ->
-            val dlUrl = linkEl.attr("href")
-            if (dlUrl.isNotBlank() && !dlUrl.contains("coming-soon", true))
-                foundIframes.add(httpsify(dlUrl))
-        }
-
-        val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
-        val sortedIframes = foundIframes.sortedBy { link ->
-            val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
-            if (idx == -1) priorityHosts.size else idx
-        }
-
-        fun detectQuality(url: String): Int = when {
-            url.contains("1080", true) || url.contains("full", true) -> Qualities.P1080.value
-            url.contains("720", true) || url.contains("hd", true) -> Qualities.P720.value
-            else -> Qualities.P480.value
-        }
-
-        fun detectHost(url: String): String = when {
-            url.contains("streamwish", true) -> "StreamWish"
-            url.contains("filemoon", true) -> "FileMoon"
-            url.contains("dood", true) -> "Doodstream"
-            url.contains("vidhide", true) -> "Vidhide"
-            url.contains("sbembed", true) -> "StreamSB"
-            url.contains("mixdrop", true) -> "MixDrop"
-            else -> "Unknown"
-        }
-
-        val extractedLinks = mutableListOf<ExtractorLink>()
-
-        sortedIframes.forEach { link ->
-            try {
-                val hostName = detectHost(link)
-                val quality = detectQuality(link)
-
-                loadExtractor(link, data, subtitleCallback) { ext ->
-                    val labeled = ext.copy(
-                        name = hostName,
-                        quality = quality
-                    )
-                    extractedLinks.add(labeled)
-                    callback(labeled)
-                }
-            } catch (_: Exception) {}
-        }
-
-        if (extractedLinks.isNotEmpty()) {
-            linkCache[data] = now to extractedLinks
-        }
-
-        return extractedLinks.isNotEmpty()
     }
+
+    doc.select("ul.gmr-download-list li a").forEach { linkEl ->
+        val dlUrl = linkEl.attr("href")
+        if (dlUrl.isNotBlank() && !dlUrl.contains("coming-soon", true))
+            foundIframes.add(httpsify(dlUrl))
+    }
+
+    val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
+    val sortedIframes = foundIframes.sortedBy { link ->
+        val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
+        if (idx == -1) priorityHosts.size else idx
+    }
+
+    fun detectQuality(url: String): Int = when {
+        url.contains("1080", true) || url.contains("full", true) -> 1080
+        url.contains("720", true) || url.contains("hd", true) -> 720
+        else -> 480
+    }
+
+    fun detectHost(url: String): String = when {
+        url.contains("streamwish", true) -> "StreamWish"
+        url.contains("filemoon", true) -> "FileMoon"
+        url.contains("dood", true) -> "Doodstream"
+        url.contains("vidhide", true) -> "Vidhide"
+        url.contains("sbembed", true) -> "StreamSB"
+        url.contains("mixdrop", true) -> "MixDrop"
+        else -> "Unknown"
+    }
+
+    val extractedLinks = mutableListOf<ExtractorLink>()
+
+    sortedIframes.forEach { link ->
+        try {
+            val hostName = detectHost(link)
+            val quality = detectQuality(link)
+
+            loadExtractor(link, data, subtitleCallback) { ext ->
+                val labeled = ExtractorLink(
+                    name = hostName,
+                    source = ext.source,
+                    url = ext.url,
+                    referer = ext.referer,
+                    quality = quality,
+                    isM3u8 = ext.isM3u8,
+                    headers = ext.headers
+                )
+                extractedLinks.add(labeled)
+                callback(labeled)
+            }
+        } catch (_: Exception) {}
+    }
+
+    if (extractedLinks.isNotEmpty()) {
+        linkCache[data] = now to extractedLinks
+    }
+
+    return extractedLinks.isNotEmpty()
 }
