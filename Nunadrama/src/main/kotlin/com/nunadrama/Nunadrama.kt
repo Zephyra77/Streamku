@@ -65,7 +65,10 @@ class Nunadrama : MainAPI() {
         val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr())?.fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
         return if (quality.isEmpty()) {
-            newTvSeriesSearchResponse(title, href, TvType.TvSeries) { this.posterUrl = poster }
+            newTvSeriesSearchResponse(title, href, TvType.TvSeries) {
+                this.posterUrl = poster
+                this.name = "$title (Series)"
+            }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 this.posterUrl = poster
@@ -120,7 +123,7 @@ class Nunadrama : MainAPI() {
                 val name = eps.text().ifBlank { eps.attr("title").ifBlank { "Episode" } }
                 val epNum = Regex("Episode\\s?(\\d+)", RegexOption.IGNORE_CASE).find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
                 newEpisode(href) {
-                    this.name = name
+                    this.name = "Sub Ep ${epNum ?: 1}: $name"
                     this.episode = epNum
                 }
             }
