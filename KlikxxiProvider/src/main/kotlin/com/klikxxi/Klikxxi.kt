@@ -119,7 +119,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                if (rating != null) addScore(rating.toString(), 10)
+                this.scoreValue = rating
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
@@ -130,7 +130,7 @@ open class Klikxxi : MainAPI() {
                 this.plot = description
                 this.tags = tags
                 this.year = year
-                if (rating != null) addScore(rating.toString(), 10)
+                this.scoreValue = rating
                 addActors(actors)
                 addTrailer(trailer)
                 this.recommendations = recommendations
