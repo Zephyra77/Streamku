@@ -149,10 +149,7 @@ class Nunadrama : MainAPI() {
             }
 
             val safeEpisodes = if (episodes.isEmpty()) {
-                listOf(newEpisode(url) {
-                    this.name = "Segera hadir..."
-                    this.episode = 0
-                })
+                listOf(newEpisode(url) { this.name = "Segera hadir..."; this.episode = 0 })
             } else episodes
 
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, safeEpisodes) {
@@ -172,7 +169,7 @@ class Nunadrama : MainAPI() {
         private const val CACHE_TTL = 5 * 60 * 1000L
     }
 
-override suspend fun loadLinks(
+    override suspend fun loadLinks(
     data: String,
     isCasting: Boolean,
     subtitleCallback: (SubtitleFile) -> Unit,
@@ -241,8 +238,10 @@ override suspend fun loadLinks(
                 )
                 callback(labeled)
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            
+        }
     }
 
     true
-} // <- pastikan ini menutup coroutineScope dan fungsi loadLinks
+    }
