@@ -13,7 +13,7 @@ class Nunadrama : MainAPI() {
     override var name = "Nunadrama"
     override val hasMainPage = true
     override var lang = "id"
-    override val supportedTypes = setOf(TvType.TvSeries, TvType.AsianDrama, TvType.Movie)
+    override val supportedTypes = setOf(TvType.AsianDrama, TvType.TvSeries, TvType.Movie)
 
     override val mainPage by lazy {
         mainPageOf(
@@ -39,20 +39,20 @@ class Nunadrama : MainAPI() {
         }
     }
 
-    private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
-
     private fun String?.fixImageQuality(): String? {
         if (this == null) return null
         val regex = Regex("(-\\d*x\\d*)").find(this)?.value ?: return this
         return this.replace(regex, "")
     }
 
+    private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
+
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h2.entry-title a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
         val poster = fixUrlNull(selectFirst("a img, div.content-thumbnail img")?.getImageAttr())?.fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().replace("-", "").trim()
-        val isSeries = href.contains("/series/", true) || href.contains("/drama/", true)
+        val isSeries = title.contains("Episode", true) || href.contains("/tv/", true)
 
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
@@ -88,20 +88,20 @@ class Nunadrama : MainAPI() {
         val actors = document.select("div.gmr-moviedata span[itemprop=actors]").map { it.text() }
 
         val epsEls = document.select("div.gmr-listseries a, div.vid-episodes a, div.eps a, ul.episodios li a")
-        val isSeries = epsEls.isNotEmpty()
+        val isSeries = epsEls.isNotEmpty() || url.contains("/tv/") || title.contains("Episode", true)
 
-        val episodes = epsEls.mapIndexedNotNull { index, el ->
-            val epUrl = el.attr("href").takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
-            val epText = el.text().ifBlank { el.attr("title") }.ifBlank { "Episode ${index + 1}" }
-            val epNum = Regex("(\\d+)").find(epText)?.groupValues?.firstOrNull()?.toIntOrNull()
-            newEpisode(epUrl) {
-                name = epText
-                episode = epNum ?: index + 1
+        if (isSeries) {
+            val episodes = epsEls.mapIndexedNotNull { index, el ->
+                val epUrl = el.attr("href").takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
+                val epText = el.text().ifBlank { el.attr("title") }.ifBlank { "Episode ${index + 1}" }
+                val epNum = Regex("(\\d+)").find(epText)?.groupValues?.firstOrNull()?.toIntOrNull()
+                newEpisode(epUrl) {
+                    name = epText
+                    episode = epNum ?: index + 1
+                }
             }
-        }
 
-        return if (isSeries) {
-            newTvSeriesLoadResponse(title, url, TvType.AsianDrama, episodes) {
+            return newTvSeriesLoadResponse(title, url, TvType.AsianDrama, episodes) {
                 posterUrl = poster
                 this.year = year
                 plot = description
@@ -110,7 +110,7 @@ class Nunadrama : MainAPI() {
                 addActors(actors)
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, url) {
+            return newMovieLoadResponse(title, url, TvType.Movie, url) {
                 posterUrl = poster
                 this.year = year
                 plot = description
@@ -149,7 +149,7 @@ class Nunadrama : MainAPI() {
             if (fixed.isNotBlank() && !fixed.contains("about:blank")) foundLinks.add(fixed)
         }
 
-        doc.select("div.mirror_item a").forEach {
+        doc.select("div.mirror_item a, a.gmr-link, div#player a").forEach {
             val href = it.attr("href")
             if (href.isNotBlank()) foundLinks.add(httpsify(href))
         }
@@ -160,8 +160,8 @@ class Nunadrama : MainAPI() {
                 "$base/wp-admin/admin-ajax.php",
                 mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
             ).document
-            ajax.select("iframe").forEach {
-                val src = it.attr("src")
+            ajax.select("iframe, a").forEach {
+                val src = it.attr("src").ifBlank { it.attr("href") }
                 val fixed = httpsify(src)
                 if (fixed.isNotBlank() && !fixed.contains("about:blank")) foundLinks.add(fixed)
             }
