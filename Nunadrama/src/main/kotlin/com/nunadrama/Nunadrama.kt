@@ -48,13 +48,13 @@ class Nunadrama : MainAPI() {
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
-                rating?.let { addScore("%.1f".format(it), 10) }
+                rating?.let { addScore(Score(it.toFloat())) }
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
                 addQuality(quality)
-                rating?.let { addScore("%.1f".format(it), 10) }
+                rating?.let { addScore(Score(it.toFloat())) }
             }
         }
     }
@@ -105,7 +105,7 @@ class Nunadrama : MainAPI() {
                 plot = desc
                 this.year = year
                 this.tags = tags
-                rating?.let { addScore("%.1f".format(it), 10) }
+                rating?.let { addScore(Score(it.toFloat())) }
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
@@ -116,7 +116,7 @@ class Nunadrama : MainAPI() {
                 plot = desc
                 this.year = year
                 this.tags = tags
-                rating?.let { addScore("%.1f".format(it), 10) }
+                rating?.let { addScore(Score(it.toFloat())) }
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
