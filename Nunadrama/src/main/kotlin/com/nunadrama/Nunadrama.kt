@@ -169,18 +169,18 @@ class Nunadrama : MainAPI() {
         private const val CACHE_TTL = 5 * 60 * 1000L
     }
 
-    override suspend fun loadLinks(
+ override suspend fun loadLinks(
     data: String,
     isCasting: Boolean,
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
-): Boolean {
+): Boolean = coroutineScope {
     val now = System.currentTimeMillis()
 
     linkCache[data]?.let { (timestamp, links) ->
         if (now - timestamp < CACHE_TTL) {
-            links.forEach(callback)
-            return true
+            links.forEach { callback(it) }
+            return@coroutineScope true
         } else {
             linkCache.remove(data)
         }
@@ -190,7 +190,7 @@ class Nunadrama : MainAPI() {
     val base = getBaseUrl(data)
     val foundIframes = mutableSetOf<String>()
 
-    doc.select("iframe, div.gmr-embed-responsive iframe").forEach { it ->
+    doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
         val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
         val fixed = httpsify(src ?: "")
         if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) {
@@ -209,7 +209,7 @@ class Nunadrama : MainAPI() {
             )
         ).document
 
-        ajax.select("iframe").forEach { it ->
+        ajax.select("iframe").forEach {
             val src = it.attr("src")
             val fixed = httpsify(src)
             if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) {
@@ -234,16 +234,10 @@ class Nunadrama : MainAPI() {
     for (link in sortedIframes) {
         try {
             loadExtractor(link, data, subtitleCallback) { ext ->
-                val labeled = newExtractorLink(
-                    name = ext.source,
-                    source = ext.source,
-                    url = ext.url
-                )
-                callback(labeled)
+                callback(newExtractorLink(name = ext.source, source = ext.source, url = ext.url))
             }
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
     }
 
-    return true
-    }
+    true
+ }
