@@ -174,13 +174,13 @@ class Nunadrama : MainAPI() {
     isCasting: Boolean,
     subtitleCallback: (SubtitleFile) -> Unit,
     callback: (ExtractorLink) -> Unit
-): Boolean = coroutineScope {
+): Boolean {
     val now = System.currentTimeMillis()
 
     linkCache[data]?.let { (timestamp, links) ->
         if (now - timestamp < CACHE_TTL) {
             links.forEach(callback)
-            return@coroutineScope true
+            return true
         } else {
             linkCache.remove(data)
         }
@@ -231,7 +231,7 @@ class Nunadrama : MainAPI() {
         if (idx == -1) priorityHosts.size else idx
     }
 
-    sortedIframes.forEach { link ->
+    for (link in sortedIframes) {
         try {
             loadExtractor(link, data, subtitleCallback) { ext ->
                 val labeled = newExtractorLink(
@@ -241,8 +241,9 @@ class Nunadrama : MainAPI() {
                 )
                 callback(labeled)
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
-    true
+    return true
     }
