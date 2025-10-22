@@ -190,11 +190,12 @@ class Nunadrama : MainAPI() {
     val base = getBaseUrl(data)
     val foundIframes = mutableSetOf<String>()
 
-    doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
+    doc.select("iframe, div.gmr-embed-responsive iframe").forEach { it ->
         val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
         val fixed = httpsify(src ?: "")
-        if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
+        if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) {
             foundIframes.add(fixed)
+        }
     }
 
     val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
@@ -208,18 +209,20 @@ class Nunadrama : MainAPI() {
             )
         ).document
 
-        ajax.select("iframe").forEach {
+        ajax.select("iframe").forEach { it ->
             val src = it.attr("src")
             val fixed = httpsify(src)
-            if (fixed.isNotBlank() && !fixed.contains("about:blank", true))
+            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) {
                 foundIframes.add(fixed)
+            }
         }
     }
 
     doc.select("ul.gmr-download-list li a").forEach { linkEl ->
         val dlUrl = linkEl.attr("href")
-        if (dlUrl.isNotBlank() && !dlUrl.contains("coming-soon", true))
+        if (dlUrl.isNotBlank() && !dlUrl.contains("coming-soon", true)) {
             foundIframes.add(httpsify(dlUrl))
+        }
     }
 
     val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
@@ -238,9 +241,7 @@ class Nunadrama : MainAPI() {
                 )
                 callback(labeled)
             }
-        } catch (_: Exception) {
-            
-        }
+        } catch (_: Exception) {}
     }
 
     true
