@@ -221,8 +221,7 @@ class Nunadrama : MainAPI() {
 
     for (link in sortedIframes) {
         try {
-            val ext = loadExtractor(link, data, subtitleCallback)
-            callback(newExtractorLink(name = ext.source, source = ext.source, url = ext.url))
+            loadExtractor(link, data, subtitleCallback, callback)
         } catch (_: Exception) {}
     }
 
