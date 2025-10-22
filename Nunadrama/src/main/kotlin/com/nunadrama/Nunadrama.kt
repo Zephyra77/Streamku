@@ -30,11 +30,12 @@ class Nunadrama : MainAPI() {
     private suspend fun request(url: String) = app.get(url)
 
     private fun Element.getImageAttr(): String {
-        return when {
-            hasAttr("data-src") -> attr("abs:data-src")
-            hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-            hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-            else -> attr("abs:src")
+        return attr("abs:data-src").ifBlank {
+            attr("abs:data-lazy-src").ifBlank {
+                attr("abs:srcset").substringBefore(" ").ifBlank {
+                    attr("abs:src")
+                }
+            }
         }
     }
 
@@ -42,48 +43,51 @@ class Nunadrama : MainAPI() {
 
     private fun String?.fixImageQuality(): String? {
         if (this == null) return null
-        val regex = Regex("(-\\d*x\\d*)").find(this)?.groupValues?.get(0) ?: return this
+        val regex = Regex("(-\\d*x\\d*)").find(this)?.value ?: return this
         return this.replace(regex, "")
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val title = selectFirst("h2.entry-title > a")?.text()?.trim() ?: return null
+        val title = selectFirst("h2.entry-title a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
-        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr())?.fixImageQuality()
-        return newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
-            this.posterUrl = poster
+        val poster = fixUrlNull(selectFirst("a img, div.content-thumbnail img")?.getImageAttr())?.fixImageQuality()
+        val quality = select("div.gmr-qual, div.gmr-quality-item a").text().replace("-", "").trim()
+        val isSeries = title.contains("Episode", true) || href.contains("episode", true)
+
+        return if (isSeries) {
+            newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
+                posterUrl = poster
+            }
+        } else {
+            newMovieSearchResponse(title, href, TvType.Movie) {
+                posterUrl = poster
+                addQuality(quality)
+            }
         }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val urlPath = String.format(request.data, page)
-        val resp = request("$mainUrl/$urlPath")
-        val items = resp.document.select("article[itemscope=itemscope], article.item")
-            .mapNotNull { it.toSearchResult() }
+        val resp = request("$mainUrl/${String.format(request.data, page)}")
+        val items = resp.document.select("article[itemscope], article.item").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val resp = request("$mainUrl/?s=$query")
-        return resp.document.select("article[itemscope=itemscope], article.item")
-            .mapNotNull { it.toSearchResult() }
+        return resp.document.select("article[itemscope], article.item").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val resp = request(url)
-        val document = resp.document
-
+        val document = request(url).document
         val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
-        val poster = fixUrlNull(document.selectFirst("figure.pull-left > img, div.gmr-movie-img img")?.getImageAttr())?.fixImageQuality()
-        val description = document.selectFirst("div.entry-content p")?.text()
-            ?: document.selectFirst("div[itemprop=description] p")?.text()
-            ?: "Deskripsi tidak ditemukan"
-        val year = document.selectFirst("div.gmr-moviedata strong:contains(Year:) > a")?.text()?.toIntOrNull()
+        val poster = fixUrlNull(document.selectFirst("figure.pull-left img, div.gmr-movie-img img")?.getImageAttr())?.fixImageQuality()
+        val description = document.selectFirst("div.entry-content p, div[itemprop=description] p")?.text()
+        val year = document.selectFirst("div.gmr-moviedata strong:contains(Year:) a")?.text()?.toIntOrNull()
         val rating = document.selectFirst("span[itemprop=ratingValue]")?.text()?.trim()
         val tags = document.select("div.gmr-moviedata a").map { it.text() }
         val actors = document.select("div.gmr-moviedata span[itemprop=actors]").map { it.text() }
 
-        val epsEls = document.select("div.vid-episodes a, div.gmr-listseries a, div.episodios a, ul.episodios li a")
+        val epsEls = document.select("div.gmr-listseries a, div.vid-episodes a, div.eps a, ul.episodios li a")
         val episodes = epsEls.mapIndexedNotNull { index, el ->
             val epUrl = el.attr("href").takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
             val epText = el.text().ifBlank { el.attr("title") }.ifBlank { "Episode ${index + 1}" }
@@ -96,18 +100,18 @@ class Nunadrama : MainAPI() {
 
         return if (episodes.isNotEmpty()) {
             newTvSeriesLoadResponse(title, url, TvType.AsianDrama, episodes) {
-                this.posterUrl = poster
+                posterUrl = poster
                 this.year = year
-                this.plot = description
+                plot = description
                 this.tags = tags
                 addScore(rating)
                 addActors(actors)
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, url) {
-                this.posterUrl = poster
+                posterUrl = poster
                 this.year = year
-                this.plot = description
+                plot = description
                 addScore(rating)
                 addActors(actors)
             }
@@ -126,9 +130,9 @@ class Nunadrama : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val now = System.currentTimeMillis()
-        linkCache[data]?.let { (timestamp, links) ->
-            if (now - timestamp < CACHE_TTL) {
-                links.forEach { callback(it) }
+        linkCache[data]?.let { (time, links) ->
+            if (now - time < CACHE_TTL) {
+                links.forEach(callback)
                 return@coroutineScope true
             } else linkCache.remove(data)
         }
@@ -140,13 +144,12 @@ class Nunadrama : MainAPI() {
         doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
             val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
             val fixed = httpsify(src ?: "")
-            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
+            if (fixed.isNotBlank() && !fixed.contains("about:blank")) foundLinks.add(fixed)
         }
 
         doc.select("div.mirror_item a").forEach {
             val href = it.attr("href")
-            val fixed = httpsify(href)
-            if (fixed.isNotBlank()) foundLinks.add(fixed)
+            if (href.isNotBlank()) foundLinks.add(httpsify(href))
         }
 
         val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
@@ -158,27 +161,27 @@ class Nunadrama : MainAPI() {
             ajax.select("iframe").forEach {
                 val src = it.attr("src")
                 val fixed = httpsify(src)
-                if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
+                if (fixed.isNotBlank() && !fixed.contains("about:blank")) foundLinks.add(fixed)
             }
         }
 
-        val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed", "userfile", "turbovid", "mirror")
-        val sortedLinks = foundLinks.sortedBy { link ->
-            val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
-            if (idx == -1) priorityHosts.size else idx
+        val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
+        val sortedLinks = foundLinks.sortedBy {
+            val i = priorityHosts.indexOfFirst { host -> it.contains(host, true) }
+            if (i == -1) priorityHosts.size else i
         }
 
-        val extracted = mutableListOf<ExtractorLink>()
+        val collected = mutableListOf<ExtractorLink>()
         for (link in sortedLinks) {
             try {
                 loadExtractor(link, data, subtitleCallback) {
+                    collected.add(it)
                     callback(it)
-                    extracted.add(it)
                 }
             } catch (_: Exception) {}
         }
 
-        linkCache[data] = now to extracted
+        linkCache[data] = now to collected
         true
     }
 }
