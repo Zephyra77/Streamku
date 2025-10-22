@@ -176,7 +176,6 @@ class Nunadrama : MainAPI() {
     callback: (ExtractorLink) -> Unit
 ): Boolean = coroutineScope {
     val now = System.currentTimeMillis()
-
     linkCache[data]?.let { (timestamp, links) ->
         if (now - timestamp < CACHE_TTL) {
             links.forEach { callback(it) }
@@ -193,36 +192,25 @@ class Nunadrama : MainAPI() {
     doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
         val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
         val fixed = httpsify(src ?: "")
-        if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) {
-            foundIframes.add(fixed)
-        }
+        if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundIframes.add(fixed)
     }
 
     val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
     if (!postId.isNullOrEmpty()) {
         val ajax = app.post(
             "$base/wp-admin/admin-ajax.php",
-            mapOf(
-                "action" to "muvipro_player_content",
-                "tab" to "server",
-                "post_id" to postId
-            )
+            mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
         ).document
-
         ajax.select("iframe").forEach {
             val src = it.attr("src")
             val fixed = httpsify(src)
-            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) {
-                foundIframes.add(fixed)
-            }
+            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundIframes.add(fixed)
         }
     }
 
     doc.select("ul.gmr-download-list li a").forEach { linkEl ->
         val dlUrl = linkEl.attr("href")
-        if (dlUrl.isNotBlank() && !dlUrl.contains("coming-soon", true)) {
-            foundIframes.add(httpsify(dlUrl))
-        }
+        if (dlUrl.isNotBlank() && !dlUrl.contains("coming-soon", true)) foundIframes.add(httpsify(dlUrl))
     }
 
     val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
@@ -233,9 +221,8 @@ class Nunadrama : MainAPI() {
 
     for (link in sortedIframes) {
         try {
-            loadExtractor(link, data, subtitleCallback) { ext ->
-                callback(newExtractorLink(name = ext.source, source = ext.source, url = ext.url))
-            }
+            val ext = loadExtractor(link, data, subtitleCallback)
+            callback(newExtractorLink(name = ext.source, source = ext.source, url = ext.url))
         } catch (_: Exception) {}
     }
 
