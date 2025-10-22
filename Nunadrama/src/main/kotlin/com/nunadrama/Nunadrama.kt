@@ -52,7 +52,7 @@ class Nunadrama : MainAPI() {
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
         val poster = fixUrlNull(selectFirst("a img, div.content-thumbnail img")?.getImageAttr())?.fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().replace("-", "").trim()
-        val isSeries = title.contains("Episode", true) || href.contains("episode", true)
+        val isSeries = href.contains("/series/", true) || href.contains("/drama/", true)
 
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
@@ -88,6 +88,8 @@ class Nunadrama : MainAPI() {
         val actors = document.select("div.gmr-moviedata span[itemprop=actors]").map { it.text() }
 
         val epsEls = document.select("div.gmr-listseries a, div.vid-episodes a, div.eps a, ul.episodios li a")
+        val isSeries = epsEls.isNotEmpty()
+
         val episodes = epsEls.mapIndexedNotNull { index, el ->
             val epUrl = el.attr("href").takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
             val epText = el.text().ifBlank { el.attr("title") }.ifBlank { "Episode ${index + 1}" }
@@ -98,7 +100,7 @@ class Nunadrama : MainAPI() {
             }
         }
 
-        return if (episodes.isNotEmpty()) {
+        return if (isSeries) {
             newTvSeriesLoadResponse(title, url, TvType.AsianDrama, episodes) {
                 posterUrl = poster
                 this.year = year
