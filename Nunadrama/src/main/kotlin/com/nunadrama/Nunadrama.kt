@@ -39,7 +39,8 @@ class Nunadrama : MainAPI() {
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
         val poster = fixUrlNull(selectFirst("a img")?.getImageAttr()).fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
-        val rating = selectFirst("div.gmr-rating-item")?.ownText()?.trim()
+        val ratingText = selectFirst("div.gmr-rating-item")?.ownText()?.trim()
+        val rating = ratingText?.toDoubleOrNull()
 
         val isSeries =
             title.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
@@ -47,13 +48,13 @@ class Nunadrama : MainAPI() {
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
-                rating?.let { addScore(it, 10) }
+                rating?.let { addScore(it.toString(), 10) }
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
                 addQuality(quality)
-                rating?.let { addScore(it, 10) }
+                rating?.let { addScore(it.toString(), 10) }
             }
         }
     }
@@ -78,7 +79,8 @@ class Nunadrama : MainAPI() {
         val title = doc.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst("figure.pull-left img")?.getImageAttr())?.fixImageQuality()
         val desc = doc.selectFirst("div[itemprop=description] p")?.text()?.trim()
-        val rating = doc.selectFirst("span[itemprop=ratingValue]")?.text()?.trim()
+        val ratingText = doc.selectFirst("span[itemprop=ratingValue]")?.text()?.trim()
+        val rating = ratingText?.toDoubleOrNull()
         val year = doc.selectFirst("div.gmr-moviedata strong:contains(Year:) a")?.text()?.toIntOrNull()
         val tags = doc.select("div.gmr-moviedata a").map { it.text() }
         val actors = doc.select("span[itemprop=actors] a").map { it.text() }
@@ -103,7 +105,7 @@ class Nunadrama : MainAPI() {
                 plot = desc
                 this.year = year
                 this.tags = tags
-                rating?.let { addScore(it, 10) }
+                rating?.let { addScore(it.toString(), 10) }
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
@@ -114,7 +116,7 @@ class Nunadrama : MainAPI() {
                 plot = desc
                 this.year = year
                 this.tags = tags
-                rating?.let { addScore(it, 10) }
+                rating?.let { addScore(it.toString(), 10) }
                 addActors(actors)
                 this.recommendations = recommendations
                 addTrailer(trailer)
