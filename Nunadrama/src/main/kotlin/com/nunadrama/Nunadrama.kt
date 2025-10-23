@@ -6,16 +6,20 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import java.net.URI
-import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Element
+import kotlinx.coroutines.coroutineScope
 
 class Nunadrama : MainAPI() {
 
     override var mainUrl = "https://tvnunadrama.store"
     private var directUrl: String? = null
+
+    private val linkCache = mutableMapOf<String, Pair<Long, List<ExtractorLink>>>()
+    private val CACHE_TTL = 1000L * 60 * 5
+
     override var name = "Nunadrama"
-    override val hasMainPage = true
     override var lang = "id"
+    override val hasMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
     override val mainPage = mainPageOf(
@@ -36,16 +40,13 @@ class Nunadrama : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h2.entry-title a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
-        val poster = fixUrlNull(selectFirst("a img")?.getImageAttr())?.fixImageQuality()
+        val poster = fixUrlNull(selectFirst("a img")?.getImageAttr()).fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
 
-        val isSeries =
-            title.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
+        val isSeries = title.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
 
         return if (isSeries) {
-            newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
-                posterUrl = poster
-            }
+            newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
@@ -62,7 +63,7 @@ class Nunadrama : MainAPI() {
     private fun Element.toRecommendResult(): SearchResponse? {
         val title = selectFirst("a > span.idmuvi-rp-title")?.text()?.trim() ?: return null
         val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr()?.fixImageQuality())
+        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr().fixImageQuality())
         return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
     }
 
@@ -162,10 +163,7 @@ class Nunadrama : MainAPI() {
             }
         }
 
-        val priorityHosts = listOf(
-            "streamwish", "filemoon", "dood", "vidhide",
-            "mixdrop", "sbembed", "userfile", "turbovid", "mirror"
-        )
+        val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed", "userfile", "turbovid", "mirror")
         val sortedLinks = foundLinks.sortedBy { link ->
             val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
             if (idx == -1) priorityHosts.size else idx
