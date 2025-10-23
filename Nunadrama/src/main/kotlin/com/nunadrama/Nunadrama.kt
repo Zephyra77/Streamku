@@ -39,8 +39,6 @@ class Nunadrama : MainAPI() {
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
         val poster = fixUrlNull(selectFirst("a img")?.getImageAttr()).fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
-        val ratingText = selectFirst("div.gmr-rating-item")?.ownText()?.trim()
-        val rating = ratingText?.toDoubleOrNull()
 
         val isSeries =
             title.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
@@ -48,13 +46,11 @@ class Nunadrama : MainAPI() {
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
-                addScore(rating?.let { "%.1f".format(it) })
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
                 addQuality(quality)
-                addScore(rating?.let { "%.1f".format(it) })
             }
         }
     }
