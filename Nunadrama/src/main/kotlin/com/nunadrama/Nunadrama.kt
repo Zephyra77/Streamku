@@ -5,8 +5,9 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
-import java.net.URI
+import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Element
+import java.net.URI
 
 class Nunadrama : MainAPI() {
 
@@ -120,49 +121,70 @@ class Nunadrama : MainAPI() {
         }
     }
 
+    private val linkCache = mutableMapOf<String, Pair<Long, List<ExtractorLink>>>()
+    private val CACHE_TTL = 1000 * 60 * 5 // 5 menit
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean {
+    ): Boolean = coroutineScope {
+        val now = System.currentTimeMillis()
+
+        linkCache[data]?.let { (time, links) ->
+            if (now - time < CACHE_TTL) {
+                links.forEach(callback)
+                return@coroutineScope true
+            } else linkCache.remove(data)
+        }
+
         val doc = app.get(data).document
-        val id = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+        val base = getBaseUrl(data)
+        val foundLinks = mutableSetOf<String>()
 
-        if (!id.isNullOrEmpty()) {
-            val servers = doc.select("div.tab-content-ajax")
-            for (server in servers) {
-                val post = app.post(
-                    "$directUrl/wp-admin/admin-ajax.php",
-                    data = mapOf(
-                        "action" to "muvipro_player_content",
-                        "tab" to server.attr("id"),
-                        "post_id" to id
-                    )
-                ).document
+        doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
+            val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
+            val fixed = httpsify(src ?: "")
+            if (fixed.isNotBlank() && !fixed.contains("about:blank")) foundLinks.add(fixed)
+        }
 
-                post.select("iframe").forEach { iframe ->
-                    val link = httpsify(iframe.attr("src"))
-                    loadExtractor(link, data, subtitleCallback, callback)
+        doc.select("div.mirror_item a, a.gmr-link, div#player a").forEach {
+            val href = it.attr("href")
+            if (href.isNotBlank()) foundLinks.add(httpsify(href))
+        }
+
+        val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+        if (!postId.isNullOrEmpty()) {
+            val ajax = app.post(
+                "$base/wp-admin/admin-ajax.php",
+                mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
+            ).document
+            ajax.select("iframe, a").forEach {
+                val src = it.attr("src").ifBlank { it.attr("href") }
+                val fixed = httpsify(src)
+                if (fixed.isNotBlank() && !fixed.contains("about:blank")) foundLinks.add(fixed)
+            }
+        }
+
+        val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
+        val sortedLinks = foundLinks.sortedBy {
+            val i = priorityHosts.indexOfFirst { host -> it.contains(host, true) }
+            if (i == -1) priorityHosts.size else i
+        }
+
+        val collected = mutableListOf<ExtractorLink>()
+        for (link in sortedLinks) {
+            try {
+                loadExtractor(link, data, subtitleCallback) {
+                    collected.add(it)
+                    callback(it)
                 }
-            }
-        } else {
-            doc.select("ul.muvipro-player-tabs li a").forEach { tab ->
-                val tabUrl = fixUrl(tab.attr("href"))
-                val iframe = app.get(tabUrl).document
-                    .selectFirst("iframe")
-                    ?.attr("src")
-                    ?.let { httpsify(it) }
-                if (!iframe.isNullOrEmpty()) loadExtractor(iframe, data, subtitleCallback, callback)
-            }
+            } catch (_: Exception) {}
         }
 
-        doc.select("ul.gmr-download-list li a").forEach { link ->
-            val dl = link.attr("href")
-            if (dl.isNotBlank()) loadExtractor(dl, data, subtitleCallback, callback)
-        }
-
-        return true
+        linkCache[data] = now to collected
+        true
     }
 
     private fun Element.getImageAttr(): String {
