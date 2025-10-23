@@ -5,9 +5,9 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
+import java.net.URI
 import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Element
-import java.net.URI
 
 class Nunadrama : MainAPI() {
 
@@ -16,18 +16,16 @@ class Nunadrama : MainAPI() {
     override var name = "Nunadrama"
     override val hasMainPage = true
     override var lang = "id"
-    override val supportedTypes =
-        setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
-    override val mainPage =
-        mainPageOf(
-            "/page/%d/?s&search=advanced&post_type=movie" to "Rilisan Terbaru",
-            "genre/drama/page/%d/" to "K-Drama",
-            "genre/j-drama/page/%d/" to "J-Drama",
-            "genre/c-drama/page/%d/" to "C-Drama",
-            "genre/thai-drama/page/%d/" to "Thai-Drama",
-            "genre/variety-show/page/%d/" to "Variety Show",
-        )
+    override val mainPage = mainPageOf(
+        "/page/%d/?s&search=advanced&post_type=movie" to "Rilisan Terbaru",
+        "genre/drama/page/%d/" to "K-Drama",
+        "genre/j-drama/page/%d/" to "J-Drama",
+        "genre/c-drama/page/%d/" to "C-Drama",
+        "genre/thai-drama/page/%d/" to "Thai-Drama",
+        "genre/variety-show/page/%d/" to "Variety Show"
+    )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val document = app.get("$mainUrl/${request.data.format(page)}").document
@@ -38,7 +36,7 @@ class Nunadrama : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h2.entry-title a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
-        val poster = fixUrlNull(selectFirst("a img")?.getImageAttr()).fixImageQuality()
+        val poster = fixUrlNull(selectFirst("a img")?.getImageAttr())?.fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
 
         val isSeries =
@@ -64,7 +62,7 @@ class Nunadrama : MainAPI() {
     private fun Element.toRecommendResult(): SearchResponse? {
         val title = selectFirst("a > span.idmuvi-rp-title")?.text()?.trim() ?: return null
         val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr().fixImageQuality())
+        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr()?.fixImageQuality())
         return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
     }
 
@@ -121,9 +119,6 @@ class Nunadrama : MainAPI() {
         }
     }
 
-    private val linkCache = mutableMapOf<String, Pair<Long, List<ExtractorLink>>>()
-    private val CACHE_TTL = 1000 * 60 * 5 // 5 menit
-
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -131,10 +126,9 @@ class Nunadrama : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val now = System.currentTimeMillis()
-
-        linkCache[data]?.let { (time, links) ->
-            if (now - time < CACHE_TTL) {
-                links.forEach(callback)
+        linkCache[data]?.let { (timestamp, links) ->
+            if (now - timestamp < CACHE_TTL) {
+                links.forEach { callback(it) }
                 return@coroutineScope true
             } else linkCache.remove(data)
         }
@@ -146,12 +140,13 @@ class Nunadrama : MainAPI() {
         doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
             val src = it.attr("src").ifBlank { it.attr("data-litespeed-src") }
             val fixed = httpsify(src ?: "")
-            if (fixed.isNotBlank() && !fixed.contains("about:blank")) foundLinks.add(fixed)
+            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
         }
 
-        doc.select("div.mirror_item a, a.gmr-link, div#player a").forEach {
+        doc.select("div.mirror_item a").forEach {
             val href = it.attr("href")
-            if (href.isNotBlank()) foundLinks.add(httpsify(href))
+            val fixed = httpsify(href)
+            if (fixed.isNotBlank()) foundLinks.add(fixed)
         }
 
         val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
@@ -160,30 +155,33 @@ class Nunadrama : MainAPI() {
                 "$base/wp-admin/admin-ajax.php",
                 mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
             ).document
-            ajax.select("iframe, a").forEach {
-                val src = it.attr("src").ifBlank { it.attr("href") }
+            ajax.select("iframe").forEach {
+                val src = it.attr("src")
                 val fixed = httpsify(src)
-                if (fixed.isNotBlank() && !fixed.contains("about:blank")) foundLinks.add(fixed)
+                if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
             }
         }
 
-        val priorityHosts = listOf("streamwish", "filemoon", "dood", "vidhide", "mixdrop", "sbembed")
-        val sortedLinks = foundLinks.sortedBy {
-            val i = priorityHosts.indexOfFirst { host -> it.contains(host, true) }
-            if (i == -1) priorityHosts.size else i
+        val priorityHosts = listOf(
+            "streamwish", "filemoon", "dood", "vidhide",
+            "mixdrop", "sbembed", "userfile", "turbovid", "mirror"
+        )
+        val sortedLinks = foundLinks.sortedBy { link ->
+            val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
+            if (idx == -1) priorityHosts.size else idx
         }
 
-        val collected = mutableListOf<ExtractorLink>()
+        val extracted = mutableListOf<ExtractorLink>()
         for (link in sortedLinks) {
             try {
                 loadExtractor(link, data, subtitleCallback) {
-                    collected.add(it)
                     callback(it)
+                    extracted.add(it)
                 }
             } catch (_: Exception) {}
         }
 
-        linkCache[data] = now to collected
+        linkCache[data] = now to extracted
         true
     }
 
