@@ -5,9 +5,9 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
-import java.net.URI
-import org.jsoup.nodes.Element
 import kotlinx.coroutines.coroutineScope
+import org.jsoup.nodes.Element
+import java.net.URI
 
 class Nunadrama : MainAPI() {
     override var mainUrl = "https://tvnunadrama.store"
@@ -58,7 +58,7 @@ class Nunadrama : MainAPI() {
     private fun Element.toRecommendResult(): SearchResponse? {
         val title = selectFirst("a > span.idmuvi-rp-title")?.text()?.trim() ?: return null
         val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr().fixImageQuality())
+        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr()?.fixImageQuality())
         return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
     }
 
@@ -66,26 +66,28 @@ class Nunadrama : MainAPI() {
         val fetch = app.get(url)
         directUrl = getBaseUrl(fetch.url)
         val doc = fetch.document
-        val title = doc.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
+
+        val title = doc.selectFirst("h1.entry-title")?.text()?.trim()?.removeSuffix("Season")?.removeSuffix("Episode")?.removeSuffix("Eps")?.let { MainAPIKt.removeBloatx(it) }.orEmpty()
         val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image")?.getImageAttr())?.fixImageQuality()
         val desc = doc.selectFirst("div[itemprop=description] p, .entry-content p")?.text()?.trim()
-        val ratingText = doc.selectFirst("span[itemprop=ratingValue]")?.text()?.trim()
-        val rating = ratingText?.toDoubleOrNull()
+        val rating = doc.selectFirst("span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val year = doc.selectFirst("div.gmr-moviedata strong:contains(Year:) a")?.text()?.toIntOrNull()
         val tags = doc.select("div.gmr-moviedata a").map { it.text() }
         val actors = doc.select("span[itemprop=actors] a").map { it.text() }
         val trailer = doc.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
         val recommendations = doc.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
-        val eps = doc.select("div.gmr-listseries a, div.vid-episodes a").mapNotNull { a ->
-            val href = a.attr("href")
-            val name = a.text().trim()
-            if (name.isBlank()) return@mapNotNull null
-            if (name.contains("Segera", true) && !href.contains("episode", true)) return@mapNotNull null
-            newEpisode(fixUrl(href)) {
-                this.name = name
-                this.episode = Regex("(\\d+)").find(name)?.groupValues?.firstOrNull()?.toIntOrNull()
+
+        val eps = doc.select("div.gmr-listseries a, div.vid-episodes a, div.episode-item a, ul.episodes li a")
+            .mapNotNull { a ->
+                val href = a.attr("href")
+                val name = a.text().trim()
+                if (href.isBlank() || name.isBlank()) return@mapNotNull null
+                newEpisode(fixUrl(href)) {
+                    this.name = name
+                    this.episode = Regex("(\\d+)").find(name)?.groupValues?.firstOrNull()?.toIntOrNull()
+                }
             }
-        }
+
         val isSeries = eps.isNotEmpty() || url.contains("/tv/")
         return if (isSeries) {
             newTvSeriesLoadResponse(title, url, TvType.AsianDrama, eps) {
@@ -125,23 +127,25 @@ class Nunadrama : MainAPI() {
                 return@coroutineScope true
             } else linkCache.remove(data)
         }
+
         val doc = app.get(data).document
         val base = getBaseUrl(data)
         val foundLinks = mutableSetOf<String>()
-        doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
-            val src = it.attr("src")
-                .ifBlank { it.attr("data-src") }
-                .ifBlank { it.attr("data-litespeed-src") }
-            val fixed = httpsify(src ?: "")
-            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) {
-                foundLinks.add(fixed)
+
+        listOf("iframe", "div.gmr-embed-responsive iframe", "div.player iframe").forEach { selector ->
+            doc.select(selector).forEach {
+                val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("data-litespeed-src") }
+                val fixed = httpsify(src ?: "")
+                if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
             }
         }
+
         doc.select("div.mirror_item a").forEach {
             val href = it.attr("href")
             val fixed = httpsify(href)
             if (fixed.isNotBlank()) foundLinks.add(fixed)
         }
+
         val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
         if (!postId.isNullOrEmpty()) {
             val ajax = app.post(
@@ -154,11 +158,13 @@ class Nunadrama : MainAPI() {
                 if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
             }
         }
+
         val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror")
         val sortedLinks = foundLinks.sortedBy { link ->
             val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
             if (idx == -1) priorityHosts.size else idx
         }
+
         val extracted = mutableListOf<ExtractorLink>()
         for (link in sortedLinks) {
             try {
@@ -168,6 +174,7 @@ class Nunadrama : MainAPI() {
                 }
             } catch (_: Exception) {}
         }
+
         linkCache[data] = now to extracted
         true
     }
