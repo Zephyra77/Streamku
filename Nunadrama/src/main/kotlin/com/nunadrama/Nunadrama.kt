@@ -30,14 +30,14 @@ class Nunadrama : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val document = app.get("$mainUrl/${request.data.format(page)}").document
-        val home = document.select("article.item, article[itemscope]").mapNotNull { it.toSearchResult() }
+        val home: List<SearchResponse> = document.select("article.item, article[itemscope]").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, home)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h2.entry-title a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
-        val poster = fixUrlNull(selectFirst("a img")?.getImageAttr()).fixImageQuality()
+        val poster = fixUrlNull(selectFirst("a img")?.getImageAttr())?.fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
         val isSeries = title.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
         return if (isSeries) {
@@ -67,7 +67,7 @@ class Nunadrama : MainAPI() {
         directUrl = getBaseUrl(fetch.url)
         val doc = fetch.document
 
-        val title = doc.selectFirst("h1.entry-title")?.text()?.trim()?.removeSuffix("Season")?.removeSuffix("Episode")?.removeSuffix("Eps")?.let { MainAPIKt.removeBloatx(it) }.orEmpty()
+        val title = doc.selectFirst("h1.entry-title")?.text()?.trim()?.removeSuffix("Season")?.removeSuffix("Episode")?.removeSuffix("Eps")?.let { removeBloatx(it) }.orEmpty()
         val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image")?.getImageAttr())?.fixImageQuality()
         val desc = doc.selectFirst("div[itemprop=description] p, .entry-content p")?.text()?.trim()
         val rating = doc.selectFirst("span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
@@ -77,11 +77,11 @@ class Nunadrama : MainAPI() {
         val trailer = doc.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
         val recommendations = doc.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
 
-        val eps = doc.select("div.gmr-listseries a, div.vid-episodes a, div.episode-item a, ul.episodes li a")
+        val eps: List<Episode> = doc.select("div.gmr-listseries a, div.vid-episodes a")
             .mapNotNull { a ->
                 val href = a.attr("href")
                 val name = a.text().trim()
-                if (href.isBlank() || name.isBlank()) return@mapNotNull null
+                if (name.isBlank() || name.contains("Segera", true)) return@mapNotNull null
                 newEpisode(fixUrl(href)) {
                     this.name = name
                     this.episode = Regex("(\\d+)").find(name)?.groupValues?.firstOrNull()?.toIntOrNull()
@@ -132,38 +132,28 @@ class Nunadrama : MainAPI() {
         val base = getBaseUrl(data)
         val foundLinks = mutableSetOf<String>()
 
-        listOf("iframe", "div.gmr-embed-responsive iframe", "div.player iframe").forEach { selector ->
-            doc.select(selector).forEach {
-                val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("data-litespeed-src") }
-                val fixed = httpsify(src ?: "")
-                if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
-            }
+        doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
+            val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("data-litespeed-src") }
+            val fixed = httpsify(src ?: "")
+            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
         }
 
         doc.select("div.mirror_item a").forEach {
-            val href = it.attr("href")
-            val fixed = httpsify(href)
+            val fixed = httpsify(it.attr("href"))
             if (fixed.isNotBlank()) foundLinks.add(fixed)
         }
 
         val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
         if (!postId.isNullOrEmpty()) {
-            val ajax = app.post(
-                "$base/wp-admin/admin-ajax.php",
-                mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
-            ).document
+            val ajax = app.post("$base/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)).document
             ajax.select("iframe").forEach {
-                val src = it.attr("src")
-                val fixed = httpsify(src)
+                val fixed = httpsify(it.attr("src"))
                 if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
             }
         }
 
         val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror")
-        val sortedLinks = foundLinks.sortedBy { link ->
-            val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
-            if (idx == -1) priorityHosts.size else idx
-        }
+        val sortedLinks = foundLinks.sortedBy { link -> priorityHosts.indexOfFirst { link.contains(it, true) }.takeIf { it != -1 } ?: priorityHosts.size }
 
         val extracted = mutableListOf<ExtractorLink>()
         for (link in sortedLinks) {
@@ -180,11 +170,7 @@ class Nunadrama : MainAPI() {
     }
 
     private fun Element.getImageAttr(): String {
-        return attr("abs:data-src").ifBlank {
-            attr("abs:data-lazy-src").ifBlank {
-                attr("abs:srcset").substringBefore(" ").ifBlank { attr("abs:src") }
-            }
-        }
+        return attr("abs:data-src").ifBlank { attr("abs:data-lazy-src").ifBlank { attr("abs:srcset").substringBefore(" ").ifBlank { attr("abs:src") } } }
     }
 
     private fun String?.fixImageQuality(): String? {
@@ -194,4 +180,8 @@ class Nunadrama : MainAPI() {
     }
 
     private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
+
+    private fun removeBloatx(title: String): String {
+        return title.replace(Regex("\\[.*?\\]|\\(.*?\\)"), "").trim()
+    }
 }
