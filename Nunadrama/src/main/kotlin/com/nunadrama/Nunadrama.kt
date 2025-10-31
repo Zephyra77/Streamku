@@ -100,9 +100,7 @@ class Nunadrama : MainAPI() {
         val actors = doc.select("div.gmr-moviedata span[itemprop=actors] a, span[itemprop=actors] a").map { it.text() }
         val trailer = doc.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
         val recommendations = doc.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
-
         val eps = parseEpisodes(doc)
-
         val isSeries = eps.isNotEmpty() || url.contains("/tv/")
         return if (isSeries) {
             newTvSeriesLoadResponse(title, url, TvType.AsianDrama, eps) {
@@ -130,6 +128,8 @@ class Nunadrama : MainAPI() {
     }
 
     private fun parseEpisodes(doc: Document): List<Episode> {
+        val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim()
+            ?.substringBefore("Season")?.substringBefore("Episode")?.substringBefore("Eps")?.let { removeBloatx(it) }.orEmpty()
         val selectors = listOf(
             "div.gmr-listseries a",
             "div.vid-episodes a",
@@ -143,22 +143,20 @@ class Nunadrama : MainAPI() {
         for (sel in selectors) {
             val els = doc.select(sel)
             if (els.isNotEmpty()) {
-                for (a in els) {
+                for ((index, a) in els.withIndex()) {
                     val name = a.text().trim()
                     if (name.isBlank()) continue
                     if (name.contains("Segera", true) || name.contains("Coming Soon", true) || name.contains("TBA", true)) continue
                     val href = a.attr("href").takeIf { it.isNotBlank() } ?: continue
-                    val epNum = Regex("(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                    val epNum = Regex("(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: index + 1
                     eps.add(newEpisode(fixUrl(href)).apply {
-                        this.name = name
+                        this.name = "$title - Episode $epNum"
                         this.episode = epNum
                     })
                 }
                 if (eps.isNotEmpty()) return eps
             }
         }
-
-        // fallback parsing
         val html = doc.html()
         val blockRegex = Regex("(?:<p[^>]*>|<div[^>]*>)\\s*Episode\\s+(\\d+)[^<]*(?:</p>|</div>)?(.*?)(?=(?:<p[^>]*>|<div[^>]*>)\\s*Episode\\s+\\d+|$)", RegexOption.DOT_MATCHES_ALL)
         val linkRegex = Regex("<a\\s+[^>]*href=([\"'])(.*?)\\1", RegexOption.IGNORE_CASE)
@@ -169,7 +167,7 @@ class Nunadrama : MainAPI() {
             if (links.isNotEmpty()) {
                 for (l in links) {
                     eps.add(newEpisode(fixUrl(l)).apply {
-                        this.name = "Episode $num"
+                        this.name = "$title - Episode $num"
                         this.episode = num
                     })
                 }
@@ -191,11 +189,9 @@ class Nunadrama : MainAPI() {
                 return@coroutineScope true
             } else linkCache.remove(data)
         }
-
         val originalData = data
         var episodeIndex: Int? = null
         var modData = data
-
         if (modData.contains("?boxeps-", ignoreCase = true)) {
             try {
                 episodeIndex = modData.substringAfter("?boxeps-").toIntOrNull()
@@ -205,30 +201,23 @@ class Nunadrama : MainAPI() {
             val m = Regex("\\-episode-(\\d+)$").find(modData)
             if (m != null) episodeIndex = m.groupValues.getOrNull(1)?.toIntOrNull()
         }
-
         val docRes = app.get(modData)
         directUrl = directUrl ?: getBaseUrl(docRes.url)
         val doc = docRes.document
-
         val found = linkedSetOf<String>()
-
-        doc.select("iframe, div.gmr-embed-responsive iframe, div.embed-responsive iframe, div.player-frame iframe")
-            .forEach {
-                val src = it.attr("src").ifBlank { it.attr("data-src") }
-                    .ifBlank { it.attr("data-litespeed-src") }
-                    .ifBlank { it.attr("data-video") }
-                    .ifBlank { it.attr("data-player") }
-                val fixed = httpsify(src)
-                if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
-            }
-
-        doc.select("div.mirror_item a, li.server-item a, ul.server-list a, div.server a")
-            .forEach {
-                val href = it.attr("href")
-                val fixed = httpsify(href)
-                if (fixed.isNotBlank()) found.add(fixed)
-            }
-
+        doc.select("iframe, div.gmr-embed-responsive iframe, div.embed-responsive iframe, div.player-frame iframe").forEach {
+            val src = it.attr("src").ifBlank { it.attr("data-src") }
+                .ifBlank { it.attr("data-litespeed-src") }
+                .ifBlank { it.attr("data-video") }
+                .ifBlank { it.attr("data-player") }
+            val fixed = httpsify(src)
+            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
+        }
+        doc.select("div.mirror_item a, li.server-item a, ul.server-list a, div.server a").forEach {
+            val href = it.attr("href")
+            val fixed = httpsify(href)
+            if (fixed.isNotBlank()) found.add(fixed)
+        }
         val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
         if (!postId.isNullOrEmpty()) {
             try {
@@ -240,13 +229,11 @@ class Nunadrama : MainAPI() {
                 }
             } catch (_: Exception) {}
         }
-
         val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror", "okru", "uqload")
         val sorted = found.toList().sortedBy { link ->
             val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
             if (idx == -1) priorityHosts.size else idx
         }
-
         val extracted = mutableListOf<ExtractorLink>()
         for (link in sorted) {
             try {
@@ -256,7 +243,6 @@ class Nunadrama : MainAPI() {
                 }
             } catch (_: Exception) {}
         }
-
         linkCache[originalData] = now to extracted
         return@coroutineScope extracted.isNotEmpty()
     }
