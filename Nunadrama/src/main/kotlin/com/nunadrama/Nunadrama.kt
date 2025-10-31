@@ -100,9 +100,7 @@ class Nunadrama : MainAPI() {
         val actors = doc.select("div.gmr-moviedata span[itemprop=actors] a, span[itemprop=actors] a").map { it.text() }
         val trailer = doc.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
         val recommendations = doc.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
-
         val eps = parseEpisodes(doc)
-
         val isSeries = eps.isNotEmpty() || url.contains("/tv/")
         return if (isSeries) {
             newTvSeriesLoadResponse(title, url, TvType.AsianDrama, eps) {
@@ -157,8 +155,6 @@ class Nunadrama : MainAPI() {
                 if (eps.isNotEmpty()) return eps
             }
         }
-
-        // fallback parsing
         val html = doc.html()
         val blockRegex = Regex("(?:<p[^>]*>|<div[^>]*>)\\s*Episode\\s+(\\d+)[^<]*(?:</p>|</div>)?(.*?)(?=(?:<p[^>]*>|<div[^>]*>)\\s*Episode\\s+\\d+|$)", RegexOption.DOT_MATCHES_ALL)
         val linkRegex = Regex("<a\\s+[^>]*href=([\"'])(.*?)\\1", RegexOption.IGNORE_CASE)
@@ -191,62 +187,52 @@ class Nunadrama : MainAPI() {
                 return@coroutineScope true
             } else linkCache.remove(data)
         }
-
         val originalData = data
-        var episodeIndex: Int? = null
-        var modData = data
-
-        if (modData.contains("?boxeps-", ignoreCase = true)) {
-            try {
-                episodeIndex = modData.substringAfter("?boxeps-").toIntOrNull()
-                modData = modData.substringBefore("?boxeps")
-            } catch (_: Exception) {}
-        } else {
-            val m = Regex("\\-episode-(\\d+)$").find(modData)
-            if (m != null) episodeIndex = m.groupValues.getOrNull(1)?.toIntOrNull()
-        }
-
+        var modData = data.substringBefore("?boxeps")
         val docRes = app.get(modData)
         directUrl = directUrl ?: getBaseUrl(docRes.url)
         val doc = docRes.document
-
         val found = linkedSetOf<String>()
-
-        doc.select("iframe, div.gmr-embed-responsive iframe, div.embed-responsive iframe, div.player-frame iframe")
-            .forEach {
-                val src = it.attr("src").ifBlank { it.attr("data-src") }
-                    .ifBlank { it.attr("data-litespeed-src") }
-                    .ifBlank { it.attr("data-video") }
-                    .ifBlank { it.attr("data-player") }
-                val fixed = httpsify(src)
-                if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
-            }
-
-        doc.select("div.mirror_item a, li.server-item a, ul.server-list a, div.server a")
-            .forEach {
-                val href = it.attr("href")
-                val fixed = httpsify(href)
-                if (fixed.isNotBlank()) found.add(fixed)
-            }
-
-        val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+        doc.select("iframe, div.gmr-embed-responsive iframe, div.embed-responsive iframe, div.player-frame iframe").forEach {
+            val src = listOf(it.attr("src"), it.attr("data-src"), it.attr("data-litespeed-src"), it.attr("data-video"), it.attr("data-player")).firstOrNull { s -> s.isNotBlank() } ?: ""
+            val fixed = httpsify(src)
+            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
+        }
+        doc.select("div.mirror_item a, li.server-item a, ul.server-list a, div.server a").forEach {
+            val href = it.attr("href")
+            val fixed = httpsify(href)
+            if (fixed.isNotBlank()) found.add(fixed)
+        }
+        val postId = doc.selectFirst("#muvipro_player_content_id")?.attr("data-id")
         if (!postId.isNullOrEmpty()) {
             try {
-                val ajax = app.post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)).document
+                val ajax = app.post("$directUrl/wp-admin/admin-ajax.php", data = mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId), referer = docRes.url).document
                 ajax.select("iframe, a").forEach {
-                    val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("href") }
+                    val src = listOf(it.attr("src"), it.attr("data-src"), it.attr("href")).firstOrNull { s -> s.isNotBlank() } ?: ""
                     val fixed = httpsify(src)
                     if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
                 }
             } catch (_: Exception) {}
         }
-
+        doc.select("script").forEach { script ->
+            val content = script.data()
+            if ("Base64" in content && "decode" in content) {
+                Regex("Base64\\.decode\\(['\"](.*?)['\"]\\)").findAll(content).forEach { match ->
+                    try {
+                        val decoded = String(android.util.Base64.decode(match.groupValues[1], android.util.Base64.DEFAULT))
+                        Regex("https?://[^\"]+").findAll(decoded).forEach {
+                            val fixed = httpsify(it.value)
+                            if (fixed.isNotBlank()) found.add(fixed)
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        }
         val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror", "okru", "uqload")
         val sorted = found.toList().sortedBy { link ->
             val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
             if (idx == -1) priorityHosts.size else idx
         }
-
         val extracted = mutableListOf<ExtractorLink>()
         for (link in sorted) {
             try {
@@ -256,7 +242,6 @@ class Nunadrama : MainAPI() {
                 }
             } catch (_: Exception) {}
         }
-
         linkCache[originalData] = now to extracted
         return@coroutineScope extracted.isNotEmpty()
     }
