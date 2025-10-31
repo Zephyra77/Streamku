@@ -38,7 +38,7 @@ class Nunadrama : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h2.entry-title a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a")?.attr("href") ?: return null)
-        val poster = fixUrlNull(selectFirst("a img")?.getImageAttr()).fixImageQuality()
+        val poster = fixUrlNull(selectFirst("a img")?.getImageAttr())?.fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
         val isSeries = title.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
         return if (isSeries) {
@@ -59,7 +59,7 @@ class Nunadrama : MainAPI() {
     private fun Element.toRecommendResult(): SearchResponse? {
         val title = selectFirst("a > span.idmuvi-rp-title")?.text()?.trim() ?: return null
         val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr().fixImageQuality())
+        val poster = fixUrlNull(selectFirst("a > img")?.getImageAttr())?.fixImageQuality()
         return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
     }
 
@@ -79,10 +79,10 @@ class Nunadrama : MainAPI() {
         val trailer = doc.selectFirst("ul.gmr-player-nav li a.gmr-trailer-popup")?.attr("href")
         val recommendations = doc.select("div.idmuvi-rp ul li").mapNotNull { it.toRecommendResult() }
 
-        val eps = doc.select("div.gmr-listseries a, div.vid-episodes a")
+        val eps = doc.select("div.gmr-listseries a, div.vid-episodes a, ul.episodios li a, div.episodios a")
             .mapNotNull { a ->
                 val name = a.text().trim()
-                if (name.isBlank() || name.contains("Segera", true)) return@mapNotNull null
+                if (name.isBlank() || name.contains("Segera", true) || name.contains("TBA", true)) return@mapNotNull null
                 val href = a.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 newEpisode(fixUrl(href)) {
                     this.name = name
@@ -133,29 +133,36 @@ class Nunadrama : MainAPI() {
         val doc = app.get(data).document
         val foundLinks = mutableSetOf<String>()
 
-        doc.select("iframe, div.gmr-embed-responsive iframe").forEach {
-            val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("data-litespeed-src") }.ifBlank { it.attr("data-video") }
-            val fixed = httpsify(src ?: "")
+        doc.select("iframe, div.gmr-embed-responsive iframe, div.embed-responsive iframe, div.player-frame iframe").forEach {
+            val src = it.attr("src").ifBlank { it.attr("data-src") }
+                .ifBlank { it.attr("data-litespeed-src") }
+                .ifBlank { it.attr("data-video") }
+                .ifBlank { it.attr("data-player") }
+            val fixed = httpsify(src)
             if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
         }
 
-        doc.select("div.mirror_item a").forEach {
+        doc.select("div.mirror_item a, li.server-item a").forEach {
             val href = it.attr("href")
             val fixed = httpsify(href)
             if (fixed.isNotBlank()) foundLinks.add(fixed)
         }
 
-        val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+        val postId = doc.selectFirst("[data-id]")?.attr("data-id")
         if (!postId.isNullOrEmpty()) {
-            val ajax = app.post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)).document
+            val ajax = app.post(
+                "$directUrl/wp-admin/admin-ajax.php",
+                data = mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
+            ).document
+
             ajax.select("iframe").forEach {
-                val src = it.attr("src")
+                val src = it.attr("src").ifBlank { it.attr("data-src") }
                 val fixed = httpsify(src)
                 if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) foundLinks.add(fixed)
             }
         }
 
-        val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror")
+        val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror", "okru", "uqload")
         val sortedLinks = foundLinks.sortedBy { link ->
             val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
             if (idx == -1) priorityHosts.size else idx
@@ -172,11 +179,15 @@ class Nunadrama : MainAPI() {
         }
 
         linkCache[data] = now to extracted
-        true
+        extracted.isNotEmpty()
     }
 
     private fun Element.getImageAttr(): String {
-        return attr("abs:data-src").ifBlank { attr("abs:data-lazy-src").ifBlank { attr("abs:srcset").substringBefore(" ").ifBlank { attr("abs:src") } } }
+        return attr("abs:data-src")
+            .ifBlank { attr("abs:data-lazy-src") }
+            .ifBlank { attr("abs:srcset").substringBefore(" ") }
+            .ifBlank { attr("abs:src") }
+            .ifBlank { attr("src") }
     }
 
     private fun String?.fixImageQuality(): String? {
