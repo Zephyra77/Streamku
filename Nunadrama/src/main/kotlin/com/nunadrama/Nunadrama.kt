@@ -177,18 +177,58 @@ class Nunadrama : MainAPI() {
             if (els.isNotEmpty()) {
                 for ((index, a) in els.withIndex()) {
                     val name = a.text().trim()
-                    if (name.isBlank() || name.contains("Segera", true) || name.contains("Coming Soon", true)) continue
+                    if (name.isBlank() || name.contains("Segera", true) || name.contains("Coming Soon", true) || name.contains("TBA", true)) continue
                     val href = a.attr("href").takeIf { it.isNotBlank() } ?: continue
-                    val epNum = Regex("(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: index + 1
+                    val epNum = extractEpisodeNumber(name) ?: index + 1
                     eps.add(newEpisode(fixUrl(href)).apply {
-                        this.name = "$title - Episode $epNum"
+                        this.name = if (title.isNotBlank()) "$title - Episode $epNum" else "Episode $epNum"
                         this.episode = epNum
                     })
                 }
-                if (eps.isNotEmpty()) return eps.sortedBy { it.episode }
+                if (eps.isNotEmpty()) {
+                    eps.sortWith(compareBy(nullsLast()) { it.episode ?: Int.MAX_VALUE })
+                    return eps
+                }
             }
         }
-        return eps.sortedBy { it.episode }
+
+        val html = doc.html()
+        val blockRegex = Regex("(?:<p[^>]*>|<div[^>]*>)\\s*Episode\\s+(\\d+)[^<]*(?:</p>|</div>)?(.*?)(?=(?:<p[^>]*>|<div[^>]*>)\\s*Episode\\s+\\d+|$)", RegexOption.DOT_MATCHES_ALL)
+        val linkRegex = Regex("<a\\s+[^>]*href=([\"'])(.*?)\\1", RegexOption.IGNORE_CASE)
+        val fallback = mutableListOf<Episode>()
+        for (m in blockRegex.findAll(html)) {
+            val num = m.groupValues.getOrNull(1)?.toIntOrNull() ?: continue
+            val content = m.groupValues.getOrNull(2) ?: continue
+            val links = linkRegex.findAll(content).mapNotNull { it.groupValues.getOrNull(2) }.toList()
+            if (links.isNotEmpty()) {
+                for (l in links) {
+                    val fixed = fixUrl(l)
+                    fallback.add(newEpisode(fixed).apply {
+                        this.name = if (title.isNotBlank()) "$title - Episode $num" else "Episode $num"
+                        this.episode = num
+                    })
+                }
+            }
+        }
+        fallback.sortWith(compareBy(nullsLast()) { it.episode ?: Int.MAX_VALUE })
+        return fallback
+    }
+
+    private fun extractEpisodeNumber(text: String): Int? {
+        val patterns = listOf(
+            Regex("(?i)Eps?\\.?\\s*(\\d{1,4})"),
+            Regex("(?i)Episode\\s*(\\d{1,4})"),
+            Regex("(?i)Ep\\s*(\\d{1,4})"),
+            Regex("(\\d{1,4})")
+        )
+        for (p in patterns) {
+            val m = p.find(text)
+            if (m != null) {
+                val n = m.groupValues.getOrNull(1)?.toIntOrNull()
+                if (n != null) return n
+            }
+        }
+        return null
     }
 
     override suspend fun loadLinks(
@@ -205,6 +245,7 @@ class Nunadrama : MainAPI() {
             } else linkCache.remove(data)
         }
 
+        val originalData = data
         var modData = data
         var episodeIndex: Int? = null
 
@@ -218,9 +259,9 @@ class Nunadrama : MainAPI() {
             if (m != null) episodeIndex = m.groupValues.getOrNull(1)?.toIntOrNull()
         }
 
-        val docRes = app.get(modData)
-        directUrl = directUrl ?: getBaseUrl(docRes.url)
-        val doc = docRes.document
+        val res = app.get(modData)
+        directUrl = directUrl ?: getBaseUrl(res.url)
+        val doc = res.document
         val found = linkedSetOf<String>()
 
         doc.select("iframe, div.gmr-embed-responsive iframe, div.embed-responsive iframe, div.player-frame iframe").forEach {
@@ -228,12 +269,13 @@ class Nunadrama : MainAPI() {
                 .ifBlank { it.attr("data-litespeed-src") }
                 .ifBlank { it.attr("data-video") }
                 .ifBlank { it.attr("data-player") }
+                .ifBlank { it.attr("data-embed") }
             val fixed = httpsify(src)
             if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
         }
 
-        doc.select("div.mirror_item a, li.server-item a, ul.server-list a, div.server a").forEach {
-            val href = it.attr("href")
+        doc.select("div.mirror_item a, li.server-item a, ul.server-list a, div.server a, a.server_link").forEach {
+            val href = it.attr("href").ifBlank { it.attr("data-url") }.ifBlank { it.attr("data-src") }
             val fixed = httpsify(href)
             if (fixed.isNotBlank()) found.add(fixed)
         }
@@ -241,20 +283,31 @@ class Nunadrama : MainAPI() {
         val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
         if (!postId.isNullOrEmpty()) {
             try {
-                val ajax = app.post(
+                val ajax1 = app.post(
+                    "$directUrl/wp-admin/admin-ajax.php",
+                    mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)
+                ).document
+                ajax1.select("iframe, a").forEach {
+                    val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("href") }
+                    val fixed = httpsify(src)
+                    if (fixed.isNotBlank()) found.add(fixed)
+                }
+            } catch (_: Exception) {}
+            try {
+                val ajax2 = app.post(
                     "$directUrl/wp-admin/admin-ajax.php",
                     mapOf("action" to "doo_player_ajax", "tab" to "player", "post_id" to postId)
                 ).document
-                ajax.select("iframe, a").forEach {
+                ajax2.select("iframe, a").forEach {
                     val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("href") }
                     val fixed = httpsify(src)
-                    if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
+                    if (fixed.isNotBlank()) found.add(fixed)
                 }
             } catch (_: Exception) {}
         }
 
         val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror", "okru", "uqload")
-        val sorted = found.toList().sortedBy { link ->
+        val sorted = found.toList().distinct().sortedBy { link ->
             val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
             if (idx == -1) priorityHosts.size else idx
         }
@@ -262,14 +315,14 @@ class Nunadrama : MainAPI() {
         val extracted = mutableListOf<ExtractorLink>()
         for (link in sorted) {
             try {
-                loadExtractor(link, data, subtitleCallback) {
+                loadExtractor(link, originalData, subtitleCallback) {
                     callback(it)
                     extracted.add(it)
                 }
             } catch (_: Exception) {}
         }
 
-        linkCache[data] = now to extracted
+        linkCache[originalData] = now to extracted
         return@coroutineScope extracted.isNotEmpty()
     }
 }
