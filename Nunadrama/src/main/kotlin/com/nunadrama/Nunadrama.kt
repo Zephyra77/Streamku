@@ -176,77 +176,84 @@ class Nunadrama : MainAPI() {
         return eps
     }
 
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean = coroutineScope {
-        val now = System.currentTimeMillis()
-        linkCache[data]?.let { (ts, links) ->
-            if (now - ts < CACHE_TTL) {
-                links.forEach { callback(it) }
-                return@coroutineScope true
-            } else linkCache.remove(data)
-        }
-        val originalData = data
-        var episodeIndex: Int? = null
-        var modData = data
-        if (modData.contains("?boxeps-", ignoreCase = true)) {
-            try {
-                episodeIndex = modData.substringAfter("?boxeps-").toIntOrNull()
-                modData = modData.substringBefore("?boxeps")
-            } catch (_: Exception) {}
-        } else {
-            val m = Regex("\\-episode-(\\d+)$").find(modData)
-            if (m != null) episodeIndex = m.groupValues.getOrNull(1)?.toIntOrNull()
-        }
-        val docRes = app.get(modData)
-        directUrl = directUrl ?: getBaseUrl(docRes.url)
-        val doc = docRes.document
-        val found = linkedSetOf<String>()
-        doc.select("iframe, div.gmr-embed-responsive iframe, div.embed-responsive iframe, div.player-frame iframe").forEach {
-            val src = it.attr("src").ifBlank { it.attr("data-src") }
-                .ifBlank { it.attr("data-litespeed-src") }
-                .ifBlank { it.attr("data-video") }
-                .ifBlank { it.attr("data-player") }
-            val fixed = httpsify(src)
-            if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
-        }
-        doc.select("div.mirror_item a, li.server-item a, ul.server-list a, div.server a").forEach {
-            val href = it.attr("href")
-            val fixed = httpsify(href)
-            if (fixed.isNotBlank()) found.add(fixed)
-        }
-        val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
-        if (!postId.isNullOrEmpty()) {
-            try {
-                val ajax = app.post("$directUrl/wp-admin/admin-ajax.php", mapOf("action" to "muvipro_player_content", "tab" to "server", "post_id" to postId)).document
-                ajax.select("iframe, a").forEach {
-                    val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("href") }
-                    val fixed = httpsify(src)
-                    if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
-                }
-            } catch (_: Exception) {}
-        }
-        val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror", "okru", "uqload")
-        val sorted = found.toList().sortedBy { link ->
-            val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
-            if (idx == -1) priorityHosts.size else idx
-        }
-        val extracted = mutableListOf<ExtractorLink>()
-        for (link in sorted) {
-            try {
-                loadExtractor(link, originalData, subtitleCallback) {
-                    callback(it)
-                    extracted.add(it)
-                }
-            } catch (_: Exception) {}
-        }
-        linkCache[originalData] = now to extracted
-        return@coroutineScope extracted.isNotEmpty()
+override suspend fun loadLinks(
+    data: String,
+    isCasting: Boolean,
+    subtitleCallback: (SubtitleFile) -> Unit,
+    callback: (ExtractorLink) -> Unit
+): Boolean = coroutineScope {
+    val now = System.currentTimeMillis()
+    linkCache[data]?.let { (ts, links) ->
+        if (now - ts < CACHE_TTL) {
+            links.forEach { callback(it) }
+            return@coroutineScope true
+        } else linkCache.remove(data)
     }
 
-    private fun removeBloatx(title: String): String =
-        title.replace(Regex("\uFEFF.*?\uFEFF|\uFEFF.*?\uFEFF"), "").trim()
+    var modData = data
+    var episodeIndex: Int? = null
+
+    if (modData.contains("?boxeps-", ignoreCase = true)) {
+        try {
+            episodeIndex = modData.substringAfter("?boxeps-").toIntOrNull()
+            modData = modData.substringBefore("?boxeps")
+        } catch (_: Exception) {}
+    } else {
+        val m = Regex("\\-episode-(\\d+)$").find(modData)
+        if (m != null) episodeIndex = m.groupValues.getOrNull(1)?.toIntOrNull()
+    }
+
+    val docRes = app.get(modData)
+    directUrl = directUrl ?: getBaseUrl(docRes.url)
+    val doc = docRes.document
+    val found = linkedSetOf<String>()
+
+    doc.select("iframe, div.gmr-embed-responsive iframe, div.embed-responsive iframe, div.player-frame iframe").forEach {
+        val src = it.attr("src").ifBlank { it.attr("data-src") }
+            .ifBlank { it.attr("data-litespeed-src") }
+            .ifBlank { it.attr("data-video") }
+            .ifBlank { it.attr("data-player") }
+        val fixed = httpsify(src)
+        if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
+    }
+
+    doc.select("div.mirror_item a, li.server-item a, ul.server-list a, div.server a").forEach {
+        val href = it.attr("href")
+        val fixed = httpsify(href)
+        if (fixed.isNotBlank()) found.add(fixed)
+    }
+
+    val postId = doc.selectFirst("div#muvipro_player_content_id")?.attr("data-id")
+    if (!postId.isNullOrEmpty()) {
+        try {
+            val ajax = app.post(
+                "$directUrl/wp-admin/admin-ajax.php",
+                mapOf("action" to "doo_player_ajax", "tab" to "player", "post_id" to postId)
+            ).document
+            ajax.select("iframe, a").forEach {
+                val src = it.attr("src").ifBlank { it.attr("data-src") }.ifBlank { it.attr("href") }
+                val fixed = httpsify(src)
+                if (fixed.isNotBlank() && !fixed.contains("about:blank", true)) found.add(fixed)
+            }
+        } catch (_: Exception) {}
+    }
+
+    val priorityHosts = listOf("streamwish", "filemoon", "dood", "mixdrop", "terabox", "sbembed", "vidhide", "mirror", "okru", "uqload")
+    val sorted = found.toList().sortedBy { link ->
+        val idx = priorityHosts.indexOfFirst { link.contains(it, true) }
+        if (idx == -1) priorityHosts.size else idx
+    }
+
+    val extracted = mutableListOf<ExtractorLink>()
+    for (link in sorted) {
+        try {
+            loadExtractor(link, data, subtitleCallback) {
+                callback(it)
+                extracted.add(it)
+            }
+        } catch (_: Exception) {}
+    }
+
+    linkCache[data] = now to extracted
+    return@coroutineScope extracted.isNotEmpty()
 }
