@@ -39,6 +39,7 @@ class Dramaindo : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse = coroutineScope {
         val doc = app.get(url).document
+
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.attr("src"))?.fixImageQuality()
         val desc = doc.selectFirst("div.entry-content p, div[itemprop=description] p, .synopsis p")?.text()?.trim()
@@ -124,12 +125,11 @@ class Dramaindo : MainAPI() {
         }
 
         val extracted = mutableListOf<ExtractorLink>()
-
         foundLinks.map { url ->
             async {
                 try {
                     loadExtractor(url, data, subtitleCallback) { link ->
-                        callback(
+                        callback.invoke(
                             newExtractorLink(
                                 link.name,
                                 link.name,
@@ -147,7 +147,6 @@ class Dramaindo : MainAPI() {
                 } catch (_: Exception) {}
             }
         }.awaitAll()
-
         return@coroutineScope extracted.isNotEmpty()
     }
 
