@@ -78,7 +78,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                addScore(score?.let { "%.1f".format(it) })
+                score?.let { addScore("%.1f".format(it)) }
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -89,7 +89,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                addScore(score?.let { "%.1f".format(it) })
+                score?.let { addScore("%.1f".format(it)) }
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -179,13 +179,13 @@ class Dramaindo : MainAPI() {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
                 score?.let { addScore(it) }
-                posterHeaders = interceptor.getCookieHeaders(mainUrl)
+                posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
                 score?.let { addScore(it) }
-                posterHeaders = interceptor.getCookieHeaders(mainUrl)
+                posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         }
     }
