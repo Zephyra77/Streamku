@@ -5,6 +5,9 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
 
@@ -34,7 +37,7 @@ class Dramaindo : MainAPI() {
         return res.document.select("article.item, article[itemscope]").mapNotNull { it.toSearchResult() }
     }
 
-    override suspend fun load(url: String): LoadResponse {
+    override suspend fun load(url: String): LoadResponse = coroutineScope {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.attr("src"))?.fixImageQuality()
@@ -48,7 +51,7 @@ class Dramaindo : MainAPI() {
         val eps = parseEpisodes(doc)
         val isSeries = eps.isNotEmpty() || url.contains("/tv/")
 
-        return if (isSeries) {
+        if (isSeries) {
             newTvSeriesLoadResponse(title, url, TvType.AsianDrama, eps) {
                 posterUrl = poster
                 plot = desc
@@ -108,12 +111,12 @@ class Dramaindo : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean {
+    ): Boolean = coroutineScope {
         val foundLinks = mutableSetOf<String>()
         val doc = app.get(data).document
 
         doc.select("iframe").forEach { iframe ->
-            iframe.attr("src")?.let { if (it.isNotBlank()) foundLinks.add(it) }
+            iframe.attr("src")?.takeIf { it.isNotBlank() }?.let { foundLinks.add(it) }
         }
         doc.select("a").forEach { a ->
             val href = a.attr("href")
@@ -122,28 +125,30 @@ class Dramaindo : MainAPI() {
 
         val extracted = mutableListOf<ExtractorLink>()
 
-        for (url in foundLinks) {
-            try {
-                loadExtractor(url, data, subtitleCallback) { link ->
-                    callback.invoke(
-                        newExtractorLink(
-                            link.name,
-                            link.name,
-                            link.url,
-                            link.type
-                        ) {
-                            this.referer = link.referer
-                            this.quality = link.quality
-                            this.headers = link.headers
-                            this.extractorData = link.extractorData
-                        }
-                    )
-                    extracted.add(link)
-                }
-            } catch (_: Exception) {}
-        }
+        foundLinks.map { url ->
+            async {
+                try {
+                    loadExtractor(url, data, subtitleCallback) { link ->
+                        callback(
+                            newExtractorLink(
+                                link.name,
+                                link.name,
+                                link.url,
+                                link.type
+                            ) {
+                                this.referer = link.referer
+                                this.quality = link.quality
+                                this.headers = link.headers
+                                this.extractorData = link.extractorData
+                            }
+                        )
+                        extracted.add(link)
+                    }
+                } catch (_: Exception) {}
+            }
+        }.awaitAll()
 
-        return extracted.isNotEmpty()
+        return@coroutineScope extracted.isNotEmpty()
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
