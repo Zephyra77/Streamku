@@ -1,6 +1,9 @@
 package com.dramaindo
 
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
+import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
@@ -35,7 +38,7 @@ class Dramaindo : MainAPI() {
         return res.document.select("article.item, article[itemscope]").mapNotNull { it.toSearchResult() }
     }
 
-    override suspend fun load(url: String): LoadResponse {
+    override suspend fun load(url: String): LoadResponse = coroutineScope {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.attr("src"))?.fixImageQuality()
@@ -49,7 +52,7 @@ class Dramaindo : MainAPI() {
         val eps = parseEpisodes(doc)
         val isSeries = eps.isNotEmpty() || url.contains("/tv/")
 
-        return if (isSeries) {
+        if (isSeries) {
             newTvSeriesLoadResponse(title, url, TvType.AsianDrama, eps) {
                 posterUrl = poster
                 plot = desc
