@@ -47,16 +47,18 @@ class Dramaindo : MainAPI() {
     override suspend fun load(url: String): LoadResponse = coroutineScope {
         val res = app.get(url, interceptor = interceptor)
         val doc = res.document
+
         val title = doc.selectFirst("h1.entry-title, h1.title, h1")?.text()?.trim().orEmpty()
         val poster = doc.selectFirst("div.thumbnail_single img, .thumbnail img, figure img, .wp-post-image")?.getImage()
         val synopsis = doc.selectFirst("div#sinopsis.synopsis p, div.entry-content p, .desc p, .synopsis p")?.text()?.trim()
         val infoElems = doc.select("div#informasi.info ul li")
+
         val judul = getContent(infoElems, "Judul:")?.text()?.substringAfter("Judul:")?.trim() ?: title
         val originalTitle = getContent(infoElems, "Judul Asli:")?.selectFirst("a, span")?.text()
             ?: getContent(infoElems, "Judul Asli:")?.text()?.substringAfter("Judul Asli:")?.trim()
         val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
         val year = getContent(infoElems, "Tahun:")?.selectFirst("a")?.text()?.toIntOrNull()
-        val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()?.let { it.toDoubleOrNull() }
+        val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()?.toDoubleOrNull()
         val director = getContent(infoElems, "Director:")?.text()?.substringAfter("Director:")?.trim()
         val tipe = getContent(infoElems, "Tipe:")?.text()?.substringAfter("Tipe:")?.trim()
         val negara = getContent(infoElems, "Negara:")?.selectFirst("a")?.text()
@@ -80,15 +82,6 @@ class Dramaindo : MainAPI() {
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
-                this.extra = mapOf(
-                    "original_title" to (originalTitle ?: ""),
-                    "director" to (director ?: ""),
-                    "tipe" to (tipe ?: ""),
-                    "negara" to (negara ?: ""),
-                    "status" to (status ?: ""),
-                    "rating_age" to (ratingAge ?: ""),
-                    "network" to (originalNetwork ?: "")
-                )
             }
         } else {
             newMovieLoadResponse(judul.ifBlank { title }, url, TvType.Movie, url) {
@@ -100,15 +93,6 @@ class Dramaindo : MainAPI() {
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
-                this.extra = mapOf(
-                    "original_title" to (originalTitle ?: ""),
-                    "director" to (director ?: ""),
-                    "tipe" to (tipe ?: ""),
-                    "negara" to (negara ?: ""),
-                    "status" to (status ?: ""),
-                    "rating_age" to (ratingAge ?: ""),
-                    "network" to (originalNetwork ?: "")
-                )
             }
         }
     }
@@ -116,24 +100,18 @@ class Dramaindo : MainAPI() {
     private fun parseEpisodesFromPage(doc: Document, pageUrl: String): List<Episode> {
         val eps = mutableListOf<Episode>()
         val listSelectors = listOf(
-            "ul.episode-list li",
-            ".daftar-episode li",
-            "div.list-episode-streaming ul.episode-list li",
-            ".daftar-episode li a"
+            "ul.episode-list li a",
+            ".daftar-episode li a",
+            "div.list-episode-streaming ul.episode-list li a"
         )
         for (sel in listSelectors) {
             val els = doc.select(sel)
             if (els.isNotEmpty()) {
-                for (li in els) {
-                    val a = li.selectFirst("a") ?: li.selectFirst("a[href]") ?: continue
+                for (a in els) {
                     val name = a.text().trim()
                     if (name.isBlank()) continue
                     val href = a.attr("href").takeIf { it.isNotBlank() } ?: continue
-                    val absolute = if (href.startsWith("?") || href.startsWith("#")) {
-                        fixUrl(pageUrl + href)
-                    } else {
-                        fixUrl(href)
-                    }
+                    val absolute = fixUrl(href)
                     val epNum = Regex("(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
                     eps.add(newEpisode(absolute).apply {
                         this.name = name
@@ -164,14 +142,9 @@ class Dramaindo : MainAPI() {
                 val b64 = it.attr("data").takeIf { s -> s.isNotBlank() }
                 if (!b64.isNullOrBlank()) {
                     val decoded = base64Decode(b64)
-                    Regex("src\\s*=\\s*\"([^\"]+)\"").find(decoded)?.groupValues?.getOrNull(1)?.let { src ->
-                        return@mapNotNull src
-                    }
-                    Regex("https?://[\\w./\\-?=&%]+").find(decoded)?.groupValues?.getOrNull(0)?.let { link ->
-                        return@mapNotNull link
-                    }
-                }
-                null
+                    Regex("src\\s*=\\s*\"([^\"]+)\"").find(decoded)?.groupValues?.getOrNull(1)
+                        ?: Regex("https?://[\\w./\\-?=&%]+").find(decoded)?.groupValues?.getOrNull(0)
+                } else null
             } catch (e: Exception) {
                 null
             }
@@ -179,40 +152,39 @@ class Dramaindo : MainAPI() {
 
         doc.select(".link_download a, .download-box a, a[href]").mapNotNull { a ->
             val href = a.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            if (href.contains("berkasdrive", true) || href.contains("mitedrive", true) || href.contains("drive", true) || href.contains("dl.berkasdrive", true) || href.contains("streaming", true)) href else null
+            if (href.contains("berkasdrive", true) || href.contains("mitedrive", true) ||
+                href.contains("drive", true) || href.contains("streaming", true)
+            ) href else null
         }.forEach { found.add(it) }
 
-        val extracted = mutableListOf<ExtractorLink>()
         found.map { url ->
             async {
                 runCatching {
-                    loadExtractor(url, data, subtitleCallback) { link ->
-                        callback(link)
-                        extracted.add(link)
-                    }
+                    loadExtractor(url, data, subtitleCallback, callback)
                 }
             }
         }.awaitAll()
 
-        extracted.isNotEmpty()
+        found.isNotEmpty()
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val titleEl = selectFirst("h3.title_post a, h2.entry-title a, h2 a, a")
-        val t = titleEl?.text()?.trim() ?: return null
+        val titleEl = selectFirst("h3.title_post a, h2.entry-title a, h2 a, a") ?: return null
+        val title = titleEl.text().trim()
         val href = titleEl.attr("href")
         val poster = selectFirst("div.thumbnail img, img")?.getImage()
         val score = Regex("Score:\\s*([^\\s]+)").find(select("div.info li").text())?.groupValues?.getOrNull(1)
-        return if (href.contains("/tv/") || selectFirst(".title_episode_2") != null || t.contains("Episode", true).not()) {
-            newTvSeriesSearchResponse(t.substringBefore("Season").substringBefore("Episode").substringBefore("Eps"), href, TvType.AsianDrama) {
+        val isSeries = href.contains("/series/") || title.contains("Episode", true)
+        return if (isSeries) {
+            newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
-                score?.let { addScore(Score.from10(it)) }
+                score?.let { addScore(it) }
                 posterHeaders = interceptor.getCookieHeaders(mainUrl)
             }
         } else {
-            newMovieSearchResponse(t, href, TvType.Movie) {
+            newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
-                score?.let { addScore(Score.from10(it)) }
+                score?.let { addScore(it) }
                 posterHeaders = interceptor.getCookieHeaders(mainUrl)
             }
         }
@@ -244,6 +216,10 @@ class Dramaindo : MainAPI() {
     }
 
     private fun base64Decode(s: String): String {
-        return try { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)) } catch (_: Throwable) { "" }
+        return try {
+            String(android.util.Base64.decode(s, android.util.Base64.DEFAULT))
+        } catch (_: Throwable) {
+            ""
+        }
     }
 }
