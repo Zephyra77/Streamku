@@ -5,9 +5,6 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
 
@@ -37,7 +34,7 @@ class Dramaindo : MainAPI() {
         return res.document.select("article.item, article[itemscope]").mapNotNull { it.toSearchResult() }
     }
 
-    override suspend fun load(url: String): LoadResponse = coroutineScope {
+    override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.attr("src"))?.fixImageQuality()
@@ -51,7 +48,7 @@ class Dramaindo : MainAPI() {
         val eps = parseEpisodes(doc)
         val isSeries = eps.isNotEmpty() || url.contains("/tv/")
 
-        if (isSeries) {
+        return if (isSeries) {
             newTvSeriesLoadResponse(title, url, TvType.AsianDrama, eps) {
                 posterUrl = poster
                 plot = desc
@@ -111,9 +108,10 @@ class Dramaindo : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean = coroutineScope {
+    ): Boolean {
         val foundLinks = mutableSetOf<String>()
         val doc = app.get(data).document
+
         doc.select("iframe").forEach { iframe ->
             iframe.attr("src")?.let { if (it.isNotBlank()) foundLinks.add(it) }
         }
@@ -123,29 +121,29 @@ class Dramaindo : MainAPI() {
         }
 
         val extracted = mutableListOf<ExtractorLink>()
-        foundLinks.map { url ->
-            async {
-                try {
-                    loadExtractor(url, data, subtitleCallback) { link ->
-                        callback.invoke(
-                            newExtractorLink(
-                                link.name,
-                                link.name,
-                                link.url,
-                                link.type
-                            ) {
-                                this.referer = link.referer
-                                this.quality = link.quality
-                                this.headers = link.headers
-                                this.extractorData = link.extractorData
-                            }
-                        )
-                        extracted.add(link)
-                    }
-                } catch (_: Exception) {}
-            }
-        }.awaitAll()
-        return@coroutineScope extracted.isNotEmpty()
+
+        for (url in foundLinks) {
+            try {
+                loadExtractor(url, data, subtitleCallback) { link ->
+                    callback.invoke(
+                        newExtractorLink(
+                            link.name,
+                            link.name,
+                            link.url,
+                            link.type
+                        ) {
+                            this.referer = link.referer
+                            this.quality = link.quality
+                            this.headers = link.headers
+                            this.extractorData = link.extractorData
+                        }
+                    )
+                    extracted.add(link)
+                }
+            } catch (_: Exception) {}
+        }
+
+        return extracted.isNotEmpty()
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
