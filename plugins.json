@@ -20,6 +20,27 @@
         "name": "Auratail"
     },
     {
+        "iconUrl": "https://drama-id.com/wp-content/uploads/2024/01/logo-dramaindo.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 19900,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 6,
+        "internalName": "Dramaindo",
+        "description": "Dramaindo",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Dramaindo.cs3",
+        "name": "Dramaindo"
+    },
+    {
         "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://justilien.com&size=%size%",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Zephyra77/Streamku",
