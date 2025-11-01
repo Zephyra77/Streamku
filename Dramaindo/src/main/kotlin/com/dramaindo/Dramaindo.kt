@@ -40,7 +40,7 @@ class Dramaindo : MainAPI() {
     override suspend fun load(url: String): LoadResponse = coroutineScope {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim().orEmpty()
-        val poster = doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.attr("src")?.fixImageQuality()
+        val poster = doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.getImage()
         val desc = doc.selectFirst("div.entry-content p, div[itemprop=description] p, .synopsis p")?.text()?.trim()
         val rating = doc.selectFirst("span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val year = doc.select("div:contains(Year:) a").lastOrNull()?.text()?.toIntOrNull()
@@ -149,7 +149,7 @@ class Dramaindo : MainAPI() {
         val title = titleRaw.substringBefore("Season").substringBefore("Episode").substringBefore("Eps")
         val a = selectFirst("a") ?: return null
         val href = a.attr("href")
-        val poster = selectFirst("img")?.attr("src")?.fixImageQuality()
+        val poster = selectFirst("img")?.getImage()
         return if (href.contains("/tv/")) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
         } else {
@@ -161,8 +161,15 @@ class Dramaindo : MainAPI() {
         val t = selectFirst("a > span.idmuvi-rp-title, .idmuvi-rp-title")?.text()?.trim() ?: return null
         val title = t.substringBefore("Season").substringBefore("Episode").substringBefore("Eps")
         val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = selectFirst("img")?.attr("src")?.fixImageQuality()
+        val poster = selectFirst("img")?.getImage()
         return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
+    }
+
+    private fun Element.getImage(): String? {
+        return attr("data-src")
+            .ifBlank { attr("data-lazy-src") }
+            .ifBlank { attr("src") }
+            ?.fixImageQuality()
     }
 
     private fun String?.fixImageQuality(): String? = this?.replace(Regex("-\\d*x\\d*"), "")
