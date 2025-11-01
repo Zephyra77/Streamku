@@ -26,11 +26,10 @@ class Nunadrama : MainAPI() {
 
     override val mainPage = mainPageOf(
         "/page/%d/?s&search=advanced&post_type=movie" to "Rilisan Terbaru",
-        "genre/drama/page/%d/" to "K-Drama",
-        "genre/j-drama/page/%d/" to "J-Drama",
-        "genre/c-drama/page/%d/" to "C-Drama",
-        "genre/thai-drama/page/%d/" to "Thai-Drama",
-        "genre/variety-show/page/%d/" to "Variety Show"
+        "/genre/action/page/%d/?post_type=movie" to "Action",
+        "/genre/romance/page/%d/?post_type=movie" to "Romance",
+        "/genre/comedy/page/%d/?post_type=movie" to "Comedy",
+        "/genre/drama/page/%d/?post_type=movie" to "Drama"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -49,9 +48,12 @@ class Nunadrama : MainAPI() {
         val res = app.get(url)
         directUrl = directUrl ?: getBaseUrl(res.url)
         val doc = res.document
-        val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim()?.substringBefore("Season")
-            ?.substringBefore("Episode")?.substringBefore("Eps")?.let { removeBloatx(it) }.orEmpty()
-        val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image, .poster img, .thumb img")?.attr("abs:src"))
+
+        val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim()
+            ?.substringBefore("Season")?.substringBefore("Episode")?.substringBefore("Eps")
+            ?.let { removeBloatx(it) }.orEmpty()
+
+        val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image, .poster img, .thumb img")?.getImageAttr())?.fixImageQuality()
         val desc = doc.selectFirst("div[itemprop=description] p, .entry-content p, .synopsis p")?.text()?.trim()
         val rating = doc.selectFirst("div.gmr-meta-rating span[itemprop=ratingValue], span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val year = doc.select("div.gmr-moviedata:contains(Year:) a, span.gmr-movie-genre:contains(Year:) a").lastOrNull()?.text()?.toIntOrNull()
@@ -123,9 +125,7 @@ class Nunadrama : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
-
         val now = System.currentTimeMillis()
-
         linkCache[data]?.let { (ts, links) ->
             if (now - ts < CACHE_TTL) {
                 links.forEach { callback(it) }
@@ -142,7 +142,7 @@ class Nunadrama : MainAPI() {
             doc.select("ul.muvipro-player-tabs li a").forEach { ele ->
                 val iframeUrl = app.get(fixUrl(ele.attr("href"))).document
                     .selectFirst("div.gmr-embed-responsive iframe")
-                    ?.attr("src")
+                    ?.getIframeAttr()
                     ?.let { httpsify(it) } ?: return@forEach
                 if (iframeUrl.isNotBlank()) foundLinks.add(iframeUrl)
             }
@@ -186,16 +186,31 @@ class Nunadrama : MainAPI() {
         return@coroutineScope extracted.isNotEmpty()
     }
 
+    // --- Helper Functions ---
+    private fun Element.getImageAttr(): String = when {
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        else -> attr("abs:src")
+    }
+
+    private fun Element?.getIframeAttr(): String? =
+        this?.attr("data-litespeed-src").takeIf { it?.isNotEmpty() == true } ?: this?.attr("src")
+
+    private fun String?.fixImageQuality(): String? =
+        this?.let { replace(Regex("(-\\d*x\\d*)").find(it)?.groupValues?.get(0) ?: it, "") }
+
     private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
 
-    private fun removeBloatx(title: String): String = title.replace(Regex("\uFEFF.*?\uFEFF|\uFEFF.*?\uFEFF"), "").trim()
+    private fun removeBloatx(title: String): String =
+        title.replace(Regex("\uFEFF.*?\uFEFF|\uFEFF.*?\uFEFF"), "").trim()
 
     private fun Element.toSearchResult(): SearchResponse? {
         val titleRaw = selectFirst("h2.entry-title a, h2 a, h3 a, .title a")?.text()?.trim() ?: return null
         val title = titleRaw.substringBefore("Season").substringBefore("Episode").substringBefore("Eps").let { removeBloatx(it) }
         val a = selectFirst("a") ?: return null
         val href = fixUrl(a.attr("href"))
-        val poster = fixUrlNull(selectFirst("a img, a > img, img")?.attr("abs:src"))
+        val poster = fixUrlNull(selectFirst("a img, a > img, img")?.getImageAttr())?.fixImageQuality()
         val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
         val isSeries = titleRaw.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
 
@@ -213,7 +228,7 @@ class Nunadrama : MainAPI() {
         val t = selectFirst("a > span.idmuvi-rp-title, .idmuvi-rp-title")?.text()?.trim() ?: return null
         val title = t.substringBefore("Season").substringBefore("Episode").substringBefore("Eps").let { removeBloatx(it) }
         val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = fixUrlNull(selectFirst("a > img, img")?.attr("abs:src"))
+        val poster = fixUrlNull(selectFirst("a > img, img")?.getImageAttr())?.fixImageQuality()
         return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
     }
 }
