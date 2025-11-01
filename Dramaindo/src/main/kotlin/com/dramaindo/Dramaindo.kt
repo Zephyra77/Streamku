@@ -27,21 +27,23 @@ class Dramaindo : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val res = app.get("$mainUrl/${request.data.format(page)}")
-        val items = res.document.select("article.item, article[itemscope]").mapNotNull { it.toSearchResult() }
+        val res = app.get("$mainUrl/${request.data}")
+        val items = res.document.select("div.post_index div.style_post_1 article")
+            .mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val res = app.get("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
-        return res.document.select("article.item, article[itemscope]").mapNotNull { it.toSearchResult() }
+        val res = app.get("$mainUrl/?s=$query")
+        return res.document.select("div.post_index div.style_post_1 article")
+            .mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse = coroutineScope {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim().orEmpty()
-        val poster = doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.getImage()
-        val desc = doc.selectFirst("div.entry-content p, div[itemprop=description] p, .synopsis p")?.text()?.trim()
+        val title = doc.selectFirst("h1.entry-title, h1.title, h1")?.text()?.trim().orEmpty()
+        val poster = doc.selectFirst("div.thumbnail img, figure img, .wp-post-image")?.getImage()
+        val desc = doc.selectFirst("div.entry-content p, .desc p, .synopsis p")?.text()?.trim()
         val rating = doc.selectFirst("span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val year = doc.select("div:contains(Year:) a").lastOrNull()?.text()?.toIntOrNull()
         val tags = doc.select("div:contains(Genre:) a").map { it.text() }
@@ -79,20 +81,17 @@ class Dramaindo : MainAPI() {
     private fun parseEpisodes(doc: Document): List<Episode> {
         val eps = mutableListOf<Episode>()
         val selectors = listOf(
+            "div.list_eps a",
             "div.gmr-listseries a",
             "div.vid-episodes a",
             "ul.episodios li a",
-            "div.episodios a",
-            "div.dzdesu ul li a",
-            "div.box a",
-            "div.box p:containsOwn(Episode) + a"
+            "div.episodios a"
         )
         for (sel in selectors) {
             val els = doc.select(sel)
             if (els.isNotEmpty()) {
                 for (a in els) {
                     val name = a.text().trim()
-                    if (name.isBlank() || name.contains("Segera", true) || name.contains("Coming Soon", true)) continue
                     val href = a.attr("href").takeIf { it.isNotBlank() } ?: continue
                     val epNum = Regex("(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
                     eps.add(newEpisode(fixUrl(href)).apply {
@@ -115,26 +114,20 @@ class Dramaindo : MainAPI() {
         val foundLinks = mutableSetOf<String>()
         val doc = app.get(data).document
 
-        doc.select("iframe").mapNotNull { it.attr("src")?.takeIf { it.isNotBlank() } }.forEach { foundLinks.add(it) }
-        doc.select("a").mapNotNull { it.attr("href")?.takeIf { it.isNotBlank() && it.contains("drive", true) } }.forEach { foundLinks.add(it) }
+        doc.select("iframe").mapNotNull { it.attr("src")?.takeIf { it.isNotBlank() } }
+            .forEach { foundLinks.add(it) }
+        doc.select("a").mapNotNull {
+            it.attr("href")?.takeIf { href ->
+                href.isNotBlank() && (href.contains("drive", true) || href.contains("stream", true))
+            }
+        }.forEach { foundLinks.add(it) }
 
         val extracted = mutableListOf<ExtractorLink>()
-
         foundLinks.map { url ->
             async {
                 runCatching {
                     loadExtractor(url, data, subtitleCallback) { link ->
-                        val extractorLink = ExtractorLink(
-                            source = link.source,
-                            name = link.name,
-                            url = link.url,
-                            referer = link.referer,
-                            quality = link.quality,
-                            headers = link.headers,
-                            extractorData = link.extractorData,
-                            type = link.type
-                        )
-                        callback(extractorLink)
+                        callback(link)
                         extracted.add(link)
                     }
                 }
@@ -145,16 +138,11 @@ class Dramaindo : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val titleRaw = selectFirst("h2.entry-title a, h2 a")?.text()?.trim() ?: return null
-        val title = titleRaw.substringBefore("Season").substringBefore("Episode").substringBefore("Eps")
-        val a = selectFirst("a") ?: return null
-        val href = a.attr("href")
-        val poster = selectFirst("img")?.getImage()
-        return if (href.contains("/tv/")) {
-            newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
-        } else {
-            newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
-        }
+        val titleElement = selectFirst("h3.title_post a, h2.entry-title a, h2 a") ?: return null
+        val title = titleElement.text().trim()
+        val href = titleElement.attr("href")
+        val poster = selectFirst("div.thumbnail img, img")?.getImage()
+        return newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
     }
 
     private fun Element.toRecommendResult(): SearchResponse? {
@@ -169,8 +157,6 @@ class Dramaindo : MainAPI() {
         return attr("data-src")
             .ifBlank { attr("data-lazy-src") }
             .ifBlank { attr("src") }
-            ?.fixImageQuality()
+            ?.replace(Regex("-\\d+x\\d+"), "")
     }
-
-    private fun String?.fixImageQuality(): String? = this?.replace(Regex("-\\d*x\\d*"), "")
 }
