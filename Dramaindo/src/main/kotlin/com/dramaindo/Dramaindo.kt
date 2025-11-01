@@ -127,19 +127,20 @@ class Dramaindo : MainAPI() {
 
         foundLinks.map { url ->
             async {
-                try {
+                runCatching {
                     loadExtractor(url, data, subtitleCallback) { link ->
-                        callback(
-                            newExtractorLink(link.name, link.name, link.url, link.type) {
-                                this.referer = link.referer
-                                this.quality = link.quality
-                                this.headers = link.headers
-                                this.extractorData = link.extractorData
-                            }
-                        )
+                        val extractorLink = newExtractorLink(
+                            link.name, link.name, link.url, link.type
+                        ) {
+                            this.referer = link.referer
+                            this.quality = link.quality
+                            this.headers = link.headers
+                            this.extractorData = link.extractorData
+                        }
+                        callback(extractorLink)
                         extracted.add(link)
                     }
-                } catch (_: Exception) {}
+                }
             }
         }.awaitAll()
 
