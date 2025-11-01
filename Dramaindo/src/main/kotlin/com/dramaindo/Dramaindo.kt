@@ -125,7 +125,7 @@ class Dramaindo : MainAPI() {
 
         val extracted = mutableListOf<ExtractorLink>()
 
-        val jobs = foundLinks.map { url ->
+        foundLinks.map { url ->
             async {
                 try {
                     loadExtractor(url, data, subtitleCallback) { link ->
@@ -141,9 +141,8 @@ class Dramaindo : MainAPI() {
                     }
                 } catch (_: Exception) {}
             }
-        }
+        }.awaitAll()
 
-        jobs.awaitAll()
         return@coroutineScope extracted.isNotEmpty()
     }
 
