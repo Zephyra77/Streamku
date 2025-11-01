@@ -123,9 +123,7 @@ class Dramaindo : MainAPI() {
             if (href.isNotBlank() && href.contains("drive", true)) foundLinks.add(href)
         }
 
-        val extracted = mutableListOf<ExtractorLink>()
-
-        foundLinks.map { url ->
+        val extracted = foundLinks.map { url ->
             async {
                 runCatching {
                     loadExtractor(url, data, subtitleCallback) { link ->
@@ -138,7 +136,6 @@ class Dramaindo : MainAPI() {
                             this.extractorData = link.extractorData
                         }
                         callback(extractorLink)
-                        extracted.add(link)
                     }
                 }
             }
