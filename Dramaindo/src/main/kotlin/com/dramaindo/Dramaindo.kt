@@ -5,11 +5,11 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import org.jsoup.nodes.Element
+import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 class Dramaindo : MainAPI() {
     override var mainUrl = "https://drama-id.com"
@@ -39,7 +39,6 @@ class Dramaindo : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse = coroutineScope {
         val doc = app.get(url).document
-
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.attr("src"))?.fixImageQuality()
         val desc = doc.selectFirst("div.entry-content p, div[itemprop=description] p, .synopsis p")?.text()?.trim()
@@ -125,17 +124,13 @@ class Dramaindo : MainAPI() {
         }
 
         val extracted = mutableListOf<ExtractorLink>()
-        foundLinks.map { url ->
+
+        val jobs = foundLinks.map { url ->
             async {
                 try {
                     loadExtractor(url, data, subtitleCallback) { link ->
-                        callback.invoke(
-                            newExtractorLink(
-                                link.name,
-                                link.name,
-                                link.url,
-                                link.type
-                            ) {
+                        callback(
+                            newExtractorLink(link.name, link.name, link.url, link.type) {
                                 this.referer = link.referer
                                 this.quality = link.quality
                                 this.headers = link.headers
@@ -146,7 +141,9 @@ class Dramaindo : MainAPI() {
                     }
                 } catch (_: Exception) {}
             }
-        }.awaitAll()
+        }
+
+        jobs.awaitAll()
         return@coroutineScope extracted.isNotEmpty()
     }
 
