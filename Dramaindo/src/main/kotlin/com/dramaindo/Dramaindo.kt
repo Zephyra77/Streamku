@@ -40,7 +40,7 @@ class Dramaindo : MainAPI() {
     override suspend fun load(url: String): LoadResponse = coroutineScope {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim().orEmpty()
-        val poster = fixUrlNull(doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.attr("src"))?.fixImageQuality()
+        val poster = doc.selectFirst("figure img, .wp-post-image, .poster img, .thumb img")?.attr("src")?.fixImageQuality()
         val desc = doc.selectFirst("div.entry-content p, div[itemprop=description] p, .synopsis p")?.text()?.trim()
         val rating = doc.selectFirst("span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val year = doc.select("div:contains(Year:) a").lastOrNull()?.text()?.toIntOrNull()
@@ -115,36 +115,24 @@ class Dramaindo : MainAPI() {
         val foundLinks = mutableSetOf<String>()
         val doc = app.get(data).document
 
-        doc.select("iframe").forEach { iframe ->
-            iframe.attr("src")?.takeIf { it.isNotBlank() }?.let { foundLinks.add(it) }
-        }
-        doc.select("a").forEach { a ->
-            val href = a.attr("href")
-            if (href.isNotBlank() && href.contains("drive", true)) foundLinks.add(href)
-        }
+        doc.select("iframe").mapNotNull { it.attr("src")?.takeIf { it.isNotBlank() } }.forEach { foundLinks.add(it) }
+        doc.select("a").mapNotNull { it.attr("href")?.takeIf { it.isNotBlank() && it.contains("drive", true) } }.forEach { foundLinks.add(it) }
 
         val extracted = mutableListOf<ExtractorLink>()
 
         foundLinks.map { url ->
             async {
-                try {
+                runCatching {
                     loadExtractor(url, data, subtitleCallback) { link ->
-                        val extractorLink = newExtractorLink(
-                            link.name, link.name, link.url, link.type
-                        ) {
-                            this.referer = link.referer
-                            this.quality = link.quality
-                            this.headers = link.headers
-                            this.extractorData = link.extractorData
-                        }
+                        val extractorLink = link.newExtractorLink() // Modern API
                         callback(extractorLink)
                         extracted.add(link)
                     }
-                } catch (_: Exception) {}
+                }
             }
         }.awaitAll()
 
-        return@coroutineScope extracted.isNotEmpty()
+        extracted.isNotEmpty()
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
