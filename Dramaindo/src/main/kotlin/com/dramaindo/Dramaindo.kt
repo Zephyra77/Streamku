@@ -124,7 +124,16 @@ class Dramaindo : MainAPI() {
             async {
                 runCatching {
                     loadExtractor(url, data, subtitleCallback) { link ->
-                        val extractorLink = link.newExtractorLink() // Modern API
+                        val extractorLink = ExtractorLink(
+                            source = link.source,
+                            name = link.name,
+                            url = link.url,
+                            referer = link.referer,
+                            quality = link.quality,
+                            headers = link.headers,
+                            extractorData = link.extractorData,
+                            type = link.type
+                        )
                         callback(extractorLink)
                         extracted.add(link)
                     }
