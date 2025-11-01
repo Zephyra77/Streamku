@@ -10,7 +10,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Document
-import java.util.*
 
 class Dramaindo : MainAPI() {
     override var mainUrl = "https://drama-id.com"
