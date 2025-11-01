@@ -5,11 +5,11 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import org.jsoup.nodes.Element
+import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 
 class Dramaindo : MainAPI() {
     override var mainUrl = "https://drama-id.com"
@@ -123,9 +123,11 @@ class Dramaindo : MainAPI() {
             if (href.isNotBlank() && href.contains("drive", true)) foundLinks.add(href)
         }
 
-        val extracted = foundLinks.map { url ->
+        val extracted = mutableListOf<ExtractorLink>()
+
+        foundLinks.map { url ->
             async {
-                runCatching {
+                try {
                     loadExtractor(url, data, subtitleCallback) { link ->
                         val extractorLink = newExtractorLink(
                             link.name, link.name, link.url, link.type
@@ -136,8 +138,9 @@ class Dramaindo : MainAPI() {
                             this.extractorData = link.extractorData
                         }
                         callback(extractorLink)
+                        extracted.add(link)
                     }
-                }
+                } catch (_: Exception) {}
             }
         }.awaitAll()
 
