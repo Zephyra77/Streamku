@@ -5,11 +5,11 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.nodes.Document
 import java.net.URI
 
 class Nunadrama : MainAPI() {
@@ -47,14 +47,11 @@ class Nunadrama : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val res = app.get(url)
-        directUrl = getBaseUrl(res.url)
+        directUrl = directUrl ?: getBaseUrl(res.url)
         val doc = res.document
-
-        val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim()
-            ?.substringBefore("Season")?.substringBefore("Episode")?.substringBefore("Eps")
-            ?.let { removeBloatx(it) }.orEmpty()
-
-        val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image, .poster img, .thumb img")?.getImageAttr())?.fixImageQuality()
+        val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim()?.substringBefore("Season")
+            ?.substringBefore("Episode")?.substringBefore("Eps")?.let { removeBloatx(it) }.orEmpty()
+        val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image, .poster img, .thumb img")?.getImageAttr())
         val desc = doc.selectFirst("div[itemprop=description] p, .entry-content p, .synopsis p")?.text()?.trim()
         val rating = doc.selectFirst("div.gmr-meta-rating span[itemprop=ratingValue], span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val year = doc.select("div.gmr-moviedata:contains(Year:) a, span.gmr-movie-genre:contains(Year:) a").lastOrNull()?.text()?.toIntOrNull()
@@ -100,7 +97,6 @@ class Nunadrama : MainAPI() {
             "div.box a",
             "div.box p:containsOwn(Episode) + a"
         )
-
         val eps = mutableListOf<Episode>()
         for (sel in selectors) {
             val els = doc.select(sel)
@@ -146,9 +142,8 @@ class Nunadrama : MainAPI() {
             doc.select("ul.muvipro-player-tabs li a").forEach { ele ->
                 val iframeUrl = app.get(fixUrl(ele.attr("href"))).document
                     .selectFirst("div.gmr-embed-responsive iframe")
-                    ?.getIframeAttr()
-                    ?.let { httpsify(it) }
-                    ?: return@forEach
+                    ?.attr("src")
+                    ?.let { httpsify(it) } ?: return@forEach
                 if (iframeUrl.isNotBlank()) foundLinks.add(iframeUrl)
             }
         } else {
@@ -191,21 +186,34 @@ class Nunadrama : MainAPI() {
         return@coroutineScope extracted.isNotEmpty()
     }
 
-    private fun Element?.getIframeAttr(): String? =
-        this?.attr("data-litespeed-src").takeIf { it?.isNotEmpty() == true } ?: this?.attr("src")
-
-    private fun Element.getImageAttr(): String = when {
-        hasAttr("data-src") -> attr("abs:data-src")
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-        else -> attr("abs:src")
-    }
-
     private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
 
-    private fun removeBloatx(title: String): String =
-        title.replace(Regex("\uFEFF.*?\uFEFF|\uFEFF.*?\uFEFF"), "").trim()
+    private fun removeBloatx(title: String): String = title.replace(Regex("\uFEFF.*?\uFEFF|\uFEFF.*?\uFEFF"), "").trim()
 
-    private fun String?.fixImageQuality(): String? =
-        this?.let { replace(Regex("(-\\d*x\\d*)").find(it)?.groupValues?.get(0) ?: it, "") }
+    private fun Element.toSearchResult(): SearchResponse? {
+        val titleRaw = selectFirst("h2.entry-title a, h2 a, h3 a, .title a")?.text()?.trim() ?: return null
+        val title = titleRaw.substringBefore("Season").substringBefore("Episode").substringBefore("Eps").let { removeBloatx(it) }
+        val a = selectFirst("a") ?: return null
+        val href = fixUrl(a.attr("href"))
+        val poster = fixUrlNull(selectFirst("a img, a > img, img")?.attr("abs:src"))
+        val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
+        val isSeries = titleRaw.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
+
+        return if (isSeries) {
+            newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
+        } else {
+            newMovieSearchResponse(title, href, TvType.Movie) {
+                posterUrl = poster
+                if (quality.isNotBlank()) addQuality(quality)
+            }
+        }
+    }
+
+    private fun Element.toRecommendResult(): SearchResponse? {
+        val t = selectFirst("a > span.idmuvi-rp-title, .idmuvi-rp-title")?.text()?.trim() ?: return null
+        val title = t.substringBefore("Season").substringBefore("Episode").substringBefore("Eps").let { removeBloatx(it) }
+        val href = selectFirst("a")?.attr("href") ?: return null
+        val poster = fixUrlNull(selectFirst("a > img, img")?.attr("abs:src"))
+        return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
+    }
 }
