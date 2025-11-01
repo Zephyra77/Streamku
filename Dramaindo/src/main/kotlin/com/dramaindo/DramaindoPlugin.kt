@@ -3,8 +3,8 @@ package com.dramaindo
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
 import android.content.Context
-import com.hexated.Mitedrive
-import com.hexated.Berkasdrive
+import com.zephyra77.Mitedrive
+import com.zephyra77.Berkasdrive
 
 @CloudstreamPlugin
 class DramaindoPlugin : Plugin() {
