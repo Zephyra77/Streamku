@@ -59,13 +59,7 @@ class Dramaindo : MainAPI() {
         val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
         val year = getContent(infoElems, "Tahun:")?.selectFirst("a")?.text()?.toIntOrNull()
         val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()?.toDoubleOrNull()
-        val director = getContent(infoElems, "Director:")?.text()?.substringAfter("Director:")?.trim()
         val tipe = getContent(infoElems, "Tipe:")?.text()?.substringAfter("Tipe:")?.trim()
-        val negara = getContent(infoElems, "Negara:")?.selectFirst("a")?.text()
-        val status = getContent(infoElems, "Status:")?.selectFirst("a")?.text()
-        val ratingAge = getContent(infoElems, "Rating usia:")?.selectFirst("a")?.text()
-        val originalNetwork = getContent(infoElems, "Original Network:")?.selectFirst("a")?.text()
-
         val eps = parseEpisodesFromPage(doc, url)
         val isSeries = eps.isNotEmpty() || url.contains("/series/") || tipe?.contains("Drama", true) == true
 
@@ -195,7 +189,7 @@ class Dramaindo : MainAPI() {
         val title = t.substringBefore("Season").substringBefore("Episode").substringBefore("Eps")
         val href = selectFirst("a")?.attr("href") ?: return null
         val poster = selectFirst("img")?.getImage()
-        return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
+        return newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
     }
 
     private fun Element.getImage(): String? {
