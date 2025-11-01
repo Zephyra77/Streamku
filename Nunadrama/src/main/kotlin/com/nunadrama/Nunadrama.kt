@@ -51,7 +51,7 @@ class Nunadrama : MainAPI() {
         val doc = res.document
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim()?.substringBefore("Season")
             ?.substringBefore("Episode")?.substringBefore("Eps")?.let { removeBloatx(it) }.orEmpty()
-        val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image, .poster img, .thumb img")?.getImageAttr())
+        val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image, .poster img, .thumb img")?.attr("abs:src"))
         val desc = doc.selectFirst("div[itemprop=description] p, .entry-content p, .synopsis p")?.text()?.trim()
         val rating = doc.selectFirst("div.gmr-meta-rating span[itemprop=ratingValue], span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
         val year = doc.select("div.gmr-moviedata:contains(Year:) a, span.gmr-movie-genre:contains(Year:) a").lastOrNull()?.text()?.toIntOrNull()
