@@ -5,11 +5,11 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import org.jsoup.nodes.Element
+import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.net.URI
 
 class Nunadrama : MainAPI() {
@@ -40,51 +40,6 @@ class Nunadrama : MainAPI() {
         return newHomePageResponse(request.name, items)
     }
 
-    private fun Element.getImageAttr(): String = when {
-        hasAttr("data-src") -> attr("abs:data-src")
-        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
-        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
-        else -> attr("abs:src")
-    }
-
-    private fun Element?.getIframeAttr(): String? =
-        this?.attr("data-litespeed-src").takeIf { it?.isNotEmpty() == true } ?: this?.attr("src")
-
-    private fun String?.fixImageQuality(): String? =
-        this?.let { replace(Regex("(-\\d*x\\d*)").find(it)?.groupValues?.get(0) ?: it, "") }
-
-    private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
-
-    private fun removeBloatx(title: String): String =
-        title.replace(Regex("\uFEFF.*?\uFEFF|\uFEFF.*?\uFEFF"), "").trim()
-
-    private fun Element.toSearchResult(): SearchResponse? {
-        val titleRaw = selectFirst("h2.entry-title a, h2 a, h3 a, .title a")?.text()?.trim() ?: return null
-        val title = titleRaw.substringBefore("Season").substringBefore("Episode").substringBefore("Eps").let { removeBloatx(it) }
-        val a = selectFirst("a") ?: return null
-        val href = fixUrl(a.attr("href"))
-        val poster = fixUrlNull(selectFirst("a img, a > img, img")?.getImageAttr())?.fixImageQuality()
-        val quality = select("div.gmr-qual, div.gmr-quality-item a").text().trim().replace("-", "")
-        val isSeries = titleRaw.contains("Episode", true) || href.contains("/tv/", true) || select("div.gmr-numbeps").isNotEmpty()
-
-        return if (isSeries) {
-            newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
-        } else {
-            newMovieSearchResponse(title, href, TvType.Movie) {
-                posterUrl = poster
-                if (quality.isNotBlank()) addQuality(quality)
-            }
-        }
-    }
-
-    private fun Element.toRecommendResult(): SearchResponse? {
-        val t = selectFirst("a > span.idmuvi-rp-title, .idmuvi-rp-title")?.text()?.trim() ?: return null
-        val title = t.substringBefore("Season").substringBefore("Episode").substringBefore("Eps").let { removeBloatx(it) }
-        val href = selectFirst("a")?.attr("href") ?: return null
-        val poster = fixUrlNull(selectFirst("a > img, img")?.getImageAttr())?.fixImageQuality()
-        return newMovieSearchResponse(title, href, TvType.Movie) { posterUrl = poster }
-    }
-
     override suspend fun search(query: String): List<SearchResponse> {
         val res = app.get("$mainUrl/?s=$query&post_type[]=post&post_type[]=tv")
         return res.document.select("article.item, article[itemscope]").mapNotNull { it.toSearchResult() }
@@ -94,9 +49,11 @@ class Nunadrama : MainAPI() {
         val res = app.get(url)
         directUrl = getBaseUrl(res.url)
         val doc = res.document
+
         val title = doc.selectFirst("h1.entry-title, h1.title")?.text()?.trim()
             ?.substringBefore("Season")?.substringBefore("Episode")?.substringBefore("Eps")
             ?.let { removeBloatx(it) }.orEmpty()
+
         val poster = fixUrlNull(doc.selectFirst("figure.pull-left img, .wp-post-image, .poster img, .thumb img")?.getImageAttr())?.fixImageQuality()
         val desc = doc.selectFirst("div[itemprop=description] p, .entry-content p, .synopsis p")?.text()?.trim()
         val rating = doc.selectFirst("div.gmr-meta-rating span[itemprop=ratingValue], span[itemprop=ratingValue]")?.text()?.toDoubleOrNull()
@@ -143,6 +100,7 @@ class Nunadrama : MainAPI() {
             "div.box a",
             "div.box p:containsOwn(Episode) + a"
         )
+
         val eps = mutableListOf<Episode>()
         for (sel in selectors) {
             val els = doc.select(sel)
@@ -232,4 +190,22 @@ class Nunadrama : MainAPI() {
         linkCache[data] = now to extracted
         return@coroutineScope extracted.isNotEmpty()
     }
+
+    private fun Element?.getIframeAttr(): String? =
+        this?.attr("data-litespeed-src").takeIf { it?.isNotEmpty() == true } ?: this?.attr("src")
+
+    private fun Element.getImageAttr(): String = when {
+        hasAttr("data-src") -> attr("abs:data-src")
+        hasAttr("data-lazy-src") -> attr("abs:data-lazy-src")
+        hasAttr("srcset") -> attr("abs:srcset").substringBefore(" ")
+        else -> attr("abs:src")
+    }
+
+    private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
+
+    private fun removeBloatx(title: String): String =
+        title.replace(Regex("\uFEFF.*?\uFEFF|\uFEFF.*?\uFEFF"), "").trim()
+
+    private fun String?.fixImageQuality(): String? =
+        this?.let { replace(Regex("(-\\d*x\\d*)").find(it)?.groupValues?.get(0) ?: it, "") }
 }
