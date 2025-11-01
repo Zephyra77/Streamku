@@ -4,12 +4,14 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
+import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 
 class Dramaindo : MainAPI() {
     override var mainUrl = "https://drama-id.com"
@@ -17,6 +19,8 @@ class Dramaindo : MainAPI() {
     override var lang = "id"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
+
+    private val interceptor by lazy { CloudflareKiller() }
 
     override val mainPage = mainPageOf(
         "" to "Rilisan Terbaru",
@@ -27,20 +31,20 @@ class Dramaindo : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val res = app.get("$mainUrl/${request.data}")
+        val res = app.get("$mainUrl/${request.data}", interceptor = interceptor)
         val items = res.document.select("div.post_index div.style_post_1 article")
             .mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val res = app.get("$mainUrl/?s=$query")
+        val res = app.get("$mainUrl/?s=$query", interceptor = interceptor)
         return res.document.select("div.post_index div.style_post_1 article")
             .mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse = coroutineScope {
-        val doc = app.get(url).document
+        val doc = app.get(url, interceptor = interceptor).document
         val title = doc.selectFirst("h1.entry-title, h1.title, h1")?.text()?.trim().orEmpty()
         val poster = doc.selectFirst("div.thumbnail img, figure img, .wp-post-image")?.getImage()
         val desc = doc.selectFirst("div.entry-content p, .desc p, .synopsis p")?.text()?.trim()
@@ -112,10 +116,11 @@ class Dramaindo : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val foundLinks = mutableSetOf<String>()
-        val doc = app.get(data).document
+        val doc = app.get(data, interceptor = interceptor).document
 
         doc.select("iframe").mapNotNull { it.attr("src")?.takeIf { it.isNotBlank() } }
             .forEach { foundLinks.add(it) }
+
         doc.select("a").mapNotNull {
             it.attr("href")?.takeIf { href ->
                 href.isNotBlank() && (href.contains("drive", true) || href.contains("stream", true))
@@ -154,9 +159,19 @@ class Dramaindo : MainAPI() {
     }
 
     private fun Element.getImage(): String? {
-        return attr("data-src")
-            .ifBlank { attr("data-lazy-src") }
-            .ifBlank { attr("src") }
-            ?.replace(Regex("-\\d+x\\d+"), "")
+        return attr("srcset")
+            .takeIf { it.isNotBlank() }
+            ?.split(",")
+            ?.map { it.trim().split(" ") }
+            ?.maxByOrNull { it.getOrNull(1)?.replace("w", "")?.toIntOrNull() ?: 0 }
+            ?.firstOrNull()
+            ?: attr("data-src")
+                .ifBlank { attr("data-lazy-src") }
+                .ifBlank { attr("src") }
+                ?.replace(Regex("-\\d+x\\d+"), "")
+    }
+
+    private fun getContent(elements: Elements, text: String): Element? {
+        return elements.firstOrNull { el -> el.selectFirst("strong")?.text() == text }
     }
 }
