@@ -14,17 +14,21 @@ open class MiteDrive : ExtractorApi() {
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ) = coroutineScope {
-        val doc = app.get(url, referer = referer).document
-        val script = doc.select("script:containsData(player)").firstOrNull()?.html() ?: return@coroutineScope
+    ) {
+        coroutineScope {
+            val doc = app.get(url, referer = referer).document
+            val script = doc.select("script:containsData(player)").firstOrNull()?.html() ?: return@coroutineScope
 
-        Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script).map { match ->
-            val videoUrl = match.groupValues[1]
-            val quality = match.groupValues[2].toIntOrNull() ?: Qualities.P720.value
-            newExtractorLink(name, "${name} ${quality}p", videoUrl, INFER_TYPE) {
-                this.referer = url
+            Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script).forEach { match ->
+                val videoUrl = match.groupValues[1]
+                val quality = match.groupValues[2].toIntOrNull() ?: Qualities.P720.value
+                callback(
+                    newExtractorLink(name, "${name} ${quality}p", videoUrl, INFER_TYPE) {
+                        this.referer = url
+                    }
+                )
             }
-        }.forEach { callback(it) }
+        }
     }
 }
 
@@ -38,16 +42,18 @@ open class BerkasDrive : ExtractorApi() {
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ) = coroutineScope {
-        val doc = app.get(url, referer = referer).document
-        val sources = doc.select("video#player source").mapNotNull { src ->
-            val videoUrl = src.attr("src").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
-            newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) {
-                this.referer = url
+    ) {
+        coroutineScope {
+            val doc = app.get(url, referer = referer).document
+            val sources = doc.select("video#player source").mapNotNull { src ->
+                val videoUrl = src.attr("src")
+                val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
+                newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) {
+                    this.referer = url
+                }
             }
-        }
 
-        sources.forEach { callback(it) }
+            sources.forEach { callback(it) }
+        }
     }
 }
