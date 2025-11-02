@@ -25,9 +25,7 @@ class MiteDrive : ExtractorApi() {
             newExtractorLink(
                 source = name,
                 name = "$name HD",
-                url = videoUrl,
-                headers = mapOf("Referer" to url),
-                type = ExtractorLinkType.MP4
+                url = videoUrl
             )
         )
     }
@@ -58,9 +56,7 @@ class BerkasDrive : ExtractorApi() {
             newExtractorLink(
                 source = name,
                 name = "$name HD",
-                url = finalUrl,
-                headers = mapOf("Referer" to decoded),
-                type = ExtractorLinkType.MP4
+                url = finalUrl
             )
         )
     }
