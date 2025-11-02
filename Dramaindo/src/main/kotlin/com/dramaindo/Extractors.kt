@@ -12,7 +12,7 @@ class MiteDrive : ExtractorApi() {
         url: String,
         referer: String?
     ): List<ExtractorLink>? {
-        val doc = app.get(url).document
+        val doc = app.get(url, referer = referer).document
 
         val script = doc.select("script:containsData(player)")?.html()
             ?: return null
@@ -21,17 +21,11 @@ class MiteDrive : ExtractorApi() {
             .find(script)?.groupValues?.get(1)
             ?: return null
 
-        val extractorData = mapOf(
-            "headers" to mapOf("Referer" to url).toString(),
-            "quality" to Qualities.P720.value.toString()
-        )
-
         return listOf(
             newExtractorLink(
                 source = name,
                 name = "$name HD",
-                url = videoUrl,
-                extractorData = extractorData.toString()
+                url = videoUrl
             )
         )
     }
@@ -46,7 +40,7 @@ class BerkasDrive : ExtractorApi() {
         url: String,
         referer: String?
     ): List<ExtractorLink>? {
-        val doc = app.get(url).document
+        val doc = app.get(url, referer = referer).document
 
         val encoded = doc.select("input[name=id]").attr("value")
         if (encoded.isNullOrEmpty()) return null
@@ -58,17 +52,11 @@ class BerkasDrive : ExtractorApi() {
             .find(text)?.groupValues?.get(1)
             ?: return null
 
-        val extractorData = mapOf(
-            "headers" to mapOf("Referer" to decoded).toString(),
-            "quality" to Qualities.P720.value.toString()
-        )
-
         return listOf(
             newExtractorLink(
                 source = name,
                 name = "$name HD",
-                url = finalUrl,
-                extractorData = extractorData.toString()
+                url = finalUrl
             )
         )
     }
