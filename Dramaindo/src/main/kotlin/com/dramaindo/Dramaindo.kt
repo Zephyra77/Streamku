@@ -143,16 +143,7 @@ class Dramaindo : MainAPI() {
 
         val filtered = found.filter { it.startsWith("http") && !it.contains("facebook") && !it.contains("instagram") }.distinct()
 
-        filtered.map { url ->
-            async {
-                runCatching {
-                    when {
-                        "mitedrive" in url -> MiteDrive().getUrl(url, data, subtitleCallback, callback)
-                        "berkasdrive" in url -> BerkasDrive().getUrl(url, data, subtitleCallback, callback)
-                    }
-                }
-            }
-        }.awaitAll()
+        Extractors.loadAllLinks(filtered, data, subtitleCallback, callback)
 
         filtered.isNotEmpty()
     }
