@@ -33,28 +33,20 @@ open class MiteDrive : ExtractorApi() {
                 val videoUrl = match.groupValues[1]
                 val quality = match.groupValues[2].toIntOrNull() ?: Qualities.P720.value
                 callback(
-                    ExtractorLink(
-                        name = "$name ${quality}p",
-                        source = name,
-                        url = videoUrl,
-                        referer = fixedUrl,
-                        quality = getQualityFromName("${quality}p"),
-                        isM3u8 = videoUrl.endsWith(".m3u8")
-                    )
+                    newExtractorLink("$name ${quality}p", name, videoUrl, fixedUrl) {
+                        this.quality = getQualityFromName("${quality}p")
+                        this.isM3u8 = videoUrl.endsWith(".m3u8")
+                    }
                 )
             }
 
         Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\"").findAll(script).forEach { match ->
             val videoUrl = match.groupValues[1]
             callback(
-                ExtractorLink(
-                    name = name,
-                    source = name,
-                    url = videoUrl,
-                    referer = fixedUrl,
-                    quality = Qualities.P720.value,
-                    isM3u8 = videoUrl.endsWith(".m3u8")
-                )
+                newExtractorLink(name, name, videoUrl, fixedUrl) {
+                    this.quality = Qualities.P720.value
+                    this.isM3u8 = videoUrl.endsWith(".m3u8")
+                }
             )
         }
     }
@@ -89,14 +81,10 @@ open class BerkasDrive : ExtractorApi() {
             }
             if (videoUrl.isNotBlank()) {
                 callback(
-                    ExtractorLink(
-                        name = "$name ${label}p",
-                        source = name,
-                        url = videoUrl,
-                        referer = workingDomain,
-                        quality = getQualityFromName("${label}p"),
-                        isM3u8 = videoUrl.endsWith(".m3u8")
-                    )
+                    newExtractorLink("$name ${label}p", name, videoUrl, workingDomain) {
+                        this.quality = getQualityFromName("${label}p")
+                        this.isM3u8 = videoUrl.endsWith(".m3u8")
+                    }
                 )
             }
         }
@@ -109,14 +97,10 @@ open class BerkasDrive : ExtractorApi() {
                     val videoUrl = match.groupValues[1]
                     val quality = match.groupValues[2].toIntOrNull() ?: 720
                     callback(
-                        ExtractorLink(
-                            name = "$name ${quality}p",
-                            source = name,
-                            url = videoUrl,
-                            referer = workingDomain,
-                            quality = getQualityFromName("${quality}p"),
-                            isM3u8 = videoUrl.endsWith(".m3u8")
-                        )
+                        newExtractorLink("$name ${quality}p", name, videoUrl, workingDomain) {
+                            this.quality = getQualityFromName("${quality}p")
+                            this.isM3u8 = videoUrl.endsWith(".m3u8")
+                        }
                     )
                 }
         }
