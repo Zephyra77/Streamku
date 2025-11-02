@@ -37,14 +37,14 @@ class MiteDrive : ExtractorApi() {
                 val isM3u8 = videoUrl.endsWith(".m3u8")
 
                 callback(
-                    newExtractorLink(
-                        name,
-                        "$name ${qualityStr}p",
-                        videoUrl,
-                        fixedUrl,
+                    ExtractorLink(
+                        source = name,
+                        name = "$name ${qualityStr}p",
+                        url = videoUrl,
+                        referer = fixedUrl,
                         quality = quality,
                         headers = mapOf("Referer" to fixedUrl),
-                        isM3u8 = isM3u8
+                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     )
                 )
             }
@@ -53,15 +53,16 @@ class MiteDrive : ExtractorApi() {
             .findAll(script)
             .forEach { match ->
                 val videoUrl = match.groupValues[1]
+                val isM3u8 = videoUrl.endsWith(".m3u8")
                 callback(
-                    newExtractorLink(
-                        name,
-                        name,
-                        videoUrl,
-                        fixedUrl,
+                    ExtractorLink(
+                        source = name,
+                        name = name,
+                        url = videoUrl,
+                        referer = fixedUrl,
                         quality = Qualities.P720.value,
                         headers = mapOf("Referer" to fixedUrl),
-                        isM3u8 = videoUrl.endsWith(".m3u8")
+                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     )
                 )
             }
@@ -97,15 +98,16 @@ class BerkasDrive : ExtractorApi() {
             }
 
             if (videoUrl.isNotBlank()) {
+                val isM3u8 = videoUrl.endsWith(".m3u8")
                 callback(
-                    newExtractorLink(
-                        name,
-                        "$name ${label}p",
-                        videoUrl,
-                        workingDomain,
+                    ExtractorLink(
+                        source = name,
+                        name = "$name ${label}p",
+                        url = videoUrl,
+                        referer = workingDomain,
                         quality = getQualityFromName("${label}p"),
                         headers = mapOf("Referer" to workingDomain),
-                        isM3u8 = videoUrl.endsWith(".m3u8")
+                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     )
                 )
             }
@@ -118,15 +120,16 @@ class BerkasDrive : ExtractorApi() {
                 .forEach { match ->
                     val videoUrl = match.groupValues[1]
                     val qualityStr = match.groupValues[2]
+                    val isM3u8 = videoUrl.endsWith(".m3u8")
                     callback(
-                        newExtractorLink(
-                            name,
-                            "$name ${qualityStr}p",
-                            videoUrl,
-                            workingDomain,
+                        ExtractorLink(
+                            source = name,
+                            name = "$name ${qualityStr}p",
+                            url = videoUrl,
+                            referer = workingDomain,
                             quality = getQualityFromName("${qualityStr}p"),
                             headers = mapOf("Referer" to workingDomain),
-                            isM3u8 = videoUrl.endsWith(".m3u8")
+                            type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                         )
                     )
                 }
