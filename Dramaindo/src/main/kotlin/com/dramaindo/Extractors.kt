@@ -14,12 +14,10 @@ class MiteDrive : ExtractorApi() {
     ): List<ExtractorLink>? {
         val doc = app.get(url, referer = referer).document
 
-        val script = doc.select("script:containsData(player)")?.html()
-            ?: return null
+        val script = doc.select("script:containsData(player)")?.html() ?: return null
 
         val videoUrl = Regex("file:\"(https[^\"]+)\"")
-            .find(script)?.groupValues?.get(1)
-            ?: return null
+            .find(script)?.groupValues?.get(1) ?: return null
 
         return listOf(
             newExtractorLink(
@@ -49,8 +47,7 @@ class BerkasDrive : ExtractorApi() {
 
         val text = app.get(decoded, referer = url).text
         val finalUrl = Regex("file\":\"(https[^\"]+)\"")
-            .find(text)?.groupValues?.get(1)
-            ?: return null
+            .find(text)?.groupValues?.get(1) ?: return null
 
         return listOf(
             newExtractorLink(
