@@ -114,27 +114,24 @@ class Dramaindo : MainAPI() {
         val res = app.get(data, interceptor = interceptor)
         val doc = res.document
 
-        doc.select("div.streaming-box[data], [data-src]").mapNotNull { it.attr("data").ifBlank { it.attr("data-src") } }
-            .forEach { encoded ->
-                val decoded = base64Decode(encoded)
-                Regex("https?://[^\"]+").findAll(decoded).map { it.value }
-                    .filter { it.startsWith("http") }
-                    .forEach { found.add(it) }
-            }
+        doc.select("div.streaming-box[data], [data-src]").mapNotNull {
+            it.attr("data").ifBlank { it.attr("data-src") }
+        }.forEach { encoded ->
+            val decoded = base64Decode(encoded)
+            Regex("https?://[^\"]+").findAll(decoded).map { it.value }
+                .filter { it.startsWith("http") }
+                .forEach { found.add(it) }
+        }
 
         doc.select(".resolusi-list li[data]").forEach { li ->
-            val encoded = li.attr("data")
-            val decoded = base64Decode(encoded)
-            if (decoded.contains("links")) {
-                runCatching {
-                    val json = JSONObject(decoded)
-                    val links = json.optJSONArray("links")
-                    if (links != null) {
-                        for (i in 0 until links.length()) {
-                            val linkObj = links.getJSONObject(i)
-                            val url = linkObj.optString("url")
-                            if (url.startsWith("http")) found.add(url)
-                        }
+            val decoded = base64Decode(li.attr("data"))
+            runCatching {
+                val json = JSONObject(decoded)
+                val links = json.optJSONArray("links")
+                if (links != null) {
+                    for (i in 0 until links.length()) {
+                        val url = links.getJSONObject(i).optString("url")
+                        if (url.startsWith("http")) found.add(url)
                     }
                 }
             }
@@ -144,11 +141,7 @@ class Dramaindo : MainAPI() {
             .filter { it.startsWith("http") }
             .forEach { found.add(it) }
 
-        val filtered = found.filter {
-            it.startsWith("http") &&
-            !it.contains("facebook") &&
-            !it.contains("instagram")
-        }.distinct()
+        val filtered = found.filter { it.startsWith("http") && !it.contains("facebook") && !it.contains("instagram") }.distinct()
 
         filtered.map { url ->
             async {
