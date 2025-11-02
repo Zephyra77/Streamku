@@ -24,29 +24,27 @@ class MiteDrive : ExtractorApi() {
     ) = coroutineScope {
         val fixedUrl = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
         val doc = app.get(url, referer = referer).document
-        val script = doc.select("script:containsData(sources), script:containsData(file)").firstOrNull()?.data()
-            ?: return@coroutineScope
 
-        Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
-            .findAll(script)
-            .forEach { match ->
-                val videoUrl = match.groupValues[1]
-                val qualityStr = match.groupValues[2]
-                val quality = getQualityFromName("${qualityStr}p")
-                val isM3u8 = videoUrl.endsWith(".m3u8")
-
-                callback(
-                    ExtractorLink(
-                        source = name,
-                        name = "$name ${qualityStr}p",
-                        url = videoUrl,
-                        referer = fixedUrl,
-                        quality = quality,
-                        headers = mapOf("Referer" to fixedUrl),
-                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+        doc.select("script:containsData(sources), script:containsData(file)").forEach { script ->
+            Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
+                .findAll(script.data())
+                .forEach { match ->
+                    val videoUrl = match.groupValues[1]
+                    val qualityStr = match.groupValues[2]
+                    val isM3u8 = videoUrl.endsWith(".m3u8")
+                    callback(
+                        ExtractorLink(
+                            source = name,
+                            name = "$name ${qualityStr}p",
+                            url = videoUrl,
+                            referer = fixedUrl,
+                            quality = getQualityFromName("${qualityStr}p"),
+                            headers = mapOf("Referer" to fixedUrl),
+                            type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                        )
                     )
-                )
-            }
+                }
+        }
     }
 }
 
@@ -73,11 +71,7 @@ class BerkasDrive : ExtractorApi() {
         doc.select("video source").forEach { src ->
             val videoUrl = src.attr("src").trim()
             if (videoUrl.isNotBlank()) {
-                val label = src.attr("label").ifBlank {
-                    src.attr("res").ifBlank {
-                        Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "720"
-                    }
-                }
+                val label = src.attr("label").ifBlank { src.attr("res").ifBlank { Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "360" } }
                 val isM3u8 = videoUrl.endsWith(".m3u8")
                 callback(
                     ExtractorLink(
@@ -93,10 +87,9 @@ class BerkasDrive : ExtractorApi() {
             }
         }
 
-        val script = doc.select("script:containsData(sources)").firstOrNull()?.data()
-        if (script != null) {
+        doc.select("script:containsData(sources), script:containsData(file)").forEach { script ->
             Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
-                .findAll(script)
+                .findAll(script.data())
                 .forEach { match ->
                     val videoUrl = match.groupValues[1]
                     val qualityStr = match.groupValues[2]
@@ -114,5 +107,22 @@ class BerkasDrive : ExtractorApi() {
                     )
                 }
         }
+
+        doc.select("[data-video], [data-src]").mapNotNull { it.attr("data-video").ifBlank { it.attr("data-src") } }
+            .forEach { videoUrl ->
+                val label = Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "360"
+                val isM3u8 = videoUrl.endsWith(".m3u8")
+                callback(
+                    ExtractorLink(
+                        source = name,
+                        name = "$name ${label}p",
+                        url = videoUrl,
+                        referer = workingDomain,
+                        quality = getQualityFromName("${label}p"),
+                        headers = mapOf("Referer" to workingDomain),
+                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    )
+                )
+            }
     }
 }
