@@ -14,19 +14,16 @@ open class MiteDrive : ExtractorApi() {
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ) {
-        coroutineScope {
-            val doc = app.get(url, referer = referer).document
-            val script = doc.select("script:containsData(player)").firstOrNull()?.html() ?: return@coroutineScope
+    ) = coroutineScope {
+        val doc = app.get(url, referer = referer).document
+        val script = doc.select("script:containsData(player)").firstOrNull()?.html() ?: return@coroutineScope
 
-            val matches = Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script)
-            val links = matches.map { match ->
-                val videoUrl = match.groupValues[1]
-                val quality = match.groupValues[2].toIntOrNull() ?: Qualities.P720.value
+        Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script).forEach { match ->
+            val videoUrl = match.groupValues[1]
+            val quality = match.groupValues[2].toIntOrNull() ?: Qualities.P720.value
+            callback(
                 newExtractorLink(name, "${name} ${quality}p", videoUrl, INFER_TYPE) { this.referer = url }
-            }.toList()
-
-            links.forEach { callback.invoke(it) }
+            )
         }
     }
 }
@@ -41,15 +38,14 @@ open class BerkasDrive : ExtractorApi() {
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ) {
-        coroutineScope {
-            val doc = app.get(url, referer = referer).document
-            val sources = doc.select("video#player source").mapNotNull { src ->
-                val videoUrl = src.attr("src").ifBlank { return@mapNotNull null }
-                val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
+    ) = coroutineScope {
+        val doc = app.get(url, referer = referer).document
+        doc.select("video#player source").forEach { src ->
+            val videoUrl = src.attr("src").ifBlank { return@forEach }
+            val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
+            callback(
                 newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) { this.referer = url }
-            }
-            sources.forEach { callback.invoke(it) }
+            )
         }
     }
 }

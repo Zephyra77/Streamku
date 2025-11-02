@@ -116,19 +116,18 @@ class Dramaindo : MainAPI() {
         val found = mutableSetOf<String>()
         val doc = app.get(data, interceptor = interceptor).document
 
-        doc.select("iframe[src]").mapNotNull { it.attr("src") }.map { found.add(it) }
+        doc.select("iframe[src]").mapNotNull { it.attr("src") }.forEach { found.add(it) }
         doc.select(".streaming-box, .streaming_load[data]").mapNotNull {
             base64Decode(it.attr("data")).let { decoded ->
                 Regex("https?://[^\"]+").find(decoded)?.value
             }
-        }.map { found.add(it) }
+        }.forEach { found.add(it) }
 
-        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']")
-            .mapNotNull { it.attr("href") }
-            .map { found.add(it) }
+        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']").mapNotNull { it.attr("href") }
+            .forEach { found.add(it) }
 
-        found.map {
-            async { runCatching { loadExtractor(it, data, subtitleCallback, callback) } }
+        found.map { link ->
+            async { runCatching { loadExtractor(link, data, subtitleCallback, callback) } }
         }.awaitAll()
 
         found.isNotEmpty()
