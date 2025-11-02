@@ -54,8 +54,6 @@ class Dramaindo : MainAPI() {
         val infoElems = doc.select("div#informasi.info ul li")
 
         val judul = getContent(infoElems, "Judul:")?.text()?.substringAfter("Judul:")?.trim() ?: title
-        val originalTitle = getContent(infoElems, "Judul Asli:")?.selectFirst("a, span")?.text()
-            ?: getContent(infoElems, "Judul Asli:")?.text()?.substringAfter("Judul Asli:")?.trim()
         val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
         val year = getContent(infoElems, "Tahun:")?.selectFirst("a")?.text()?.toIntOrNull()
         val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()
@@ -72,7 +70,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (!score.isNullOrBlank()) addScore(score) // gunakan string langsung
+                if (!score.isNullOrBlank()) addScore(score)
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -83,7 +81,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (!score.isNullOrBlank()) addScore(score) // gunakan string langsung
+                if (!score.isNullOrBlank()) addScore(score)
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
