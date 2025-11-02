@@ -58,7 +58,7 @@ class Dramaindo : MainAPI() {
             ?: getContent(infoElems, "Judul Asli:")?.text()?.substringAfter("Judul Asli:")?.trim()
         val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
         val year = getContent(infoElems, "Tahun:")?.selectFirst("a")?.text()?.toIntOrNull()
-        val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()?.toDoubleOrNull()
+        val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()
         val tipe = getContent(infoElems, "Tipe:")?.text()?.substringAfter("Tipe:")?.trim()
         val eps = parseEpisodesFromPage(doc, url)
         val isSeries = eps.isNotEmpty() || url.contains("/series/") || tipe?.contains("Drama", true) == true
@@ -72,7 +72,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (score != null) addScore(Score(score.toFloat(), maxValue = 10))
+                if (!score.isNullOrBlank()) addScore(score, maxValue = 10)
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -83,7 +83,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (score != null) addScore(Score(score.toFloat(), maxValue = 10))
+                if (!score.isNullOrBlank()) addScore(score, maxValue = 10)
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -172,13 +172,13 @@ class Dramaindo : MainAPI() {
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
-                if (score != null) addScore(Score(score.toFloat(), maxValue = 10))
+                if (!score.isNullOrBlank()) addScore(score, maxValue = 10)
                 posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
-                if (score != null) addScore(Score(score.toFloat(), maxValue = 10))
+                if (!score.isNullOrBlank()) addScore(score, maxValue = 10)
                 posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         }
