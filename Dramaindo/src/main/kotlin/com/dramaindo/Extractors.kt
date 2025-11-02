@@ -21,7 +21,9 @@ open class MiteDrive : ExtractorApi() {
         matches.map {
             val videoUrl = it.groupValues[1]
             val quality = it.groupValues[2].toIntOrNull() ?: Qualities.P720.value
-            newExtractorLink(name, "${name} ${quality}p", videoUrl, INFER_TYPE) { this.referer = url }
+            newExtractorLink(name, "${name} ${quality}p", videoUrl, INFER_TYPE) {
+                this.referer = url
+            }
         }.forEach { callback(it) }
     }
 }
@@ -38,10 +40,11 @@ open class BerkasDrive : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
         val doc = app.get(url, referer = referer).document
-        doc.select("video#player source").mapNotNull { src ->
-            val videoUrl = src.attr("src")
+        val sources = doc.select("video#player source").mapNotNull { src ->
+            val videoUrl = src.attr("src").takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
             newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) { this.referer = url }
-        }.forEach { callback(it) }
+        }
+        sources.forEach { callback(it) }
     }
 }

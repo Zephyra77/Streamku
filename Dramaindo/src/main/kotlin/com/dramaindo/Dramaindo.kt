@@ -20,6 +20,7 @@ class Dramaindo : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
     private val interceptor by lazy { CloudflareKiller() }
+    private val extractors by lazy { listOf(MiteDrive(), BerkasDrive()) }
 
     override val mainPage = mainPageOf(
         "" to "Rilisan Terbaru",
@@ -65,7 +66,6 @@ class Dramaindo : MainAPI() {
                 || (eps.size == 1 && url.contains("?episode=1"))
 
         val isSeries = !forceMovie && (eps.size > 1 || url.contains("/series/"))
-
         val recommendations = doc.select("div.list-drama .style_post_1 article, div.idmuvi-rp ul li")
             .mapNotNull { it.toRecommendResult() }
 
@@ -116,20 +116,20 @@ class Dramaindo : MainAPI() {
         val found = mutableSetOf<String>()
         val doc = app.get(data, interceptor = interceptor).document
 
-        doc.select("iframe[src], .streaming-box, .streaming_load[data]").forEach { element ->
-            val url = element.attr("src").takeIf { it.isNotBlank() }
-                ?: runCatching { String(android.util.Base64.decode(element.attr("data"), android.util.Base64.DEFAULT)) }
-                    .getOrNull()
-            if (!url.isNullOrBlank()) found.add(url)
-        }
-
-        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']").mapNotNull { it.attr("href") }
-            .forEach { found.add(it) }
+        doc.select("iframe[src]").mapNotNull { it.attr("src") }.map { found.add(it) }
+        doc.select(".streaming-box, .streaming_load[data]").mapNotNull {
+            base64Decode(it.attr("data")).let { decoded ->
+                Regex("https?://[^\"]+").find(decoded)?.value
+            }
+        }.map { found.add(it) }
+        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']").mapNotNull { it.attr("href") }.map { found.add(it) }
 
         found.map { url ->
             async {
                 runCatching {
-                    BerkasDrive().getUrl(url, referer = data, subtitleCallback = subtitleCallback, callback = callback)
+                    extractors.forEach { ext ->
+                        ext.getUrl(url, data, subtitleCallback, callback)
+                    }
                 }
             }
         }.awaitAll()
@@ -176,5 +176,9 @@ class Dramaindo : MainAPI() {
 
     private fun getContent(elements: Elements, text: String): Element? {
         return elements.firstOrNull { it.selectFirst("strong")?.text()?.trim() == text }
+    }
+
+    private fun base64Decode(s: String): String {
+        return runCatching { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)) }.getOrElse { "" }
     }
 }
