@@ -21,11 +21,14 @@ class MiteDrive : ExtractorApi() {
             .find(script)?.groupValues?.get(1)
             ?: return null
 
+        @Suppress("DEPRECATION")
         return listOf(
-            newExtractorLink(
+            ExtractorLink(
                 source = name,
                 name = "$name HD",
-                url = videoUrl
+                url = videoUrl,
+                referer = url,
+                quality = Qualities.P720.value
             )
         )
     }
@@ -52,11 +55,14 @@ class BerkasDrive : ExtractorApi() {
             .find(text)?.groupValues?.get(1)
             ?: return null
 
+        @Suppress("DEPRECATION")
         return listOf(
-            newExtractorLink(
+            ExtractorLink(
                 source = name,
                 name = "$name HD",
-                url = finalUrl
+                url = finalUrl,
+                referer = decoded,
+                quality = Qualities.P720.value
             )
         )
     }
