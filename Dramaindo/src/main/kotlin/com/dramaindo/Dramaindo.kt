@@ -2,7 +2,6 @@ package com.dramaindo
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.*
@@ -58,7 +57,6 @@ class Dramaindo : MainAPI() {
             ?: getContent(infoElems, "Judul Asli:")?.text()?.substringAfter("Judul Asli:")?.trim()
         val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
         val year = getContent(infoElems, "Tahun:")?.selectFirst("a")?.text()?.toIntOrNull()
-        val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()
         val tipe = getContent(infoElems, "Tipe:")?.text()?.substringAfter("Tipe:")?.trim()
         val eps = parseEpisodesFromPage(doc, url)
         val isSeries = eps.isNotEmpty() || url.contains("/series/") || tipe?.contains("Drama", true) == true
@@ -66,13 +64,12 @@ class Dramaindo : MainAPI() {
         val recommendations = doc.select("div.list-drama .style_post_1 article, div.idmuvi-rp ul li")
             .mapNotNull { it.toRecommendResult() }
 
-        return@coroutineScope if (isSeries) {
+        if (isSeries) {
             newTvSeriesLoadResponse(judul.ifBlank { title }, url, TvType.AsianDrama, eps) {
                 posterUrl = poster
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (!score.isNullOrBlank()) addScore(score)
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -83,7 +80,6 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (!score.isNullOrBlank()) addScore(score)
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -132,16 +128,12 @@ class Dramaindo : MainAPI() {
             .forEach { found.add(it) }
 
         doc.select(".streaming-box, .streaming_load").mapNotNull {
-            try {
-                val b64 = it.attr("data").takeIf { s -> s.isNotBlank() }
-                if (!b64.isNullOrBlank()) {
-                    val decoded = base64Decode(b64)
-                    Regex("src\\s*=\\s*\"([^\"]+)\"").find(decoded)?.groupValues?.getOrNull(1)
-                        ?: Regex("https?://[\\w./\\-?=&%]+").find(decoded)?.groupValues?.getOrNull(0)
-                } else null
-            } catch (_: Exception) {
-                null
-            }
+            val b64 = it.attr("data").takeIf { s -> s.isNotBlank() }
+            if (!b64.isNullOrBlank()) {
+                val decoded = base64Decode(b64)
+                Regex("src\\s*=\\s*\"([^\"]+)\"").find(decoded)?.groupValues?.getOrNull(1)
+                    ?: Regex("https?://[\\w./\\-?=&%]+").find(decoded)?.groupValues?.getOrNull(0)
+            } else null
         }.forEach { found.add(it) }
 
         doc.select(".link_download a, .download-box a, a[href]").mapNotNull { a ->
@@ -167,18 +159,15 @@ class Dramaindo : MainAPI() {
         val title = titleEl.text().trim()
         val href = titleEl.attr("href")
         val poster = selectFirst("div.thumbnail img, img")?.getImage()
-        val score = Regex("Score:\\s*([^\\s]+)").find(select("div.info li").text())?.groupValues?.getOrNull(1)
         val isSeries = href.contains("/series/") || title.contains("Episode", true)
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
-                if (!score.isNullOrBlank()) addScore(score)
                 posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
-                if (!score.isNullOrBlank()) addScore(score)
                 posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         }
