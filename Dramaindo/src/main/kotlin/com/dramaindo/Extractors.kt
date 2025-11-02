@@ -9,9 +9,6 @@ open class Mitedrive : ExtractorApi() {
     override val mainUrl = "https://mitedrive.com"
     override val requiresReferer = false
 
-    data class Data(@JsonProperty("original_url") val url: String? = null)
-    data class Responses(@JsonProperty("data") val data: Data? = null)
-
     override suspend fun getUrl(
         url: String,
         referer: String?,
@@ -19,26 +16,34 @@ open class Mitedrive : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val id = url.substringAfterLast("/")
-        val video = app.post(
+        val response = app.post(
             "https://api.mitedrive.com/api/view/$id",
             referer = "$mainUrl/",
             data = mapOf(
                 "csrf_token" to "ZXlKcGNDSTZJak0yTGpneExqWTFMakUyTWlJc0ltUmxkbWxqWlNJNklrMXZlbWxzYkdFdk5TNHdJQ2hYYVc1a2IzZHpJRTVVSURFd0xqQTdJRmRwYmpZME95QjROalE3SUhKMk9qRXdNUzR3S1NCSFpXTnJieTh5TURFd01ERXdNU0JHYVhKbFptOTRMekV3TVM0d0lpd2lZbkp2ZDNObGNpSTZJazF2ZW1sc2JHRWlMQ0pqYjI5cmFXVWlPaUlpTENKeVpXWmxjbkpsY2lJNklpSjk=",
                 "slug" to id
             )
-        ).parsedSafe<Responses>()?.data?.url ?: return
+        ).parsedSafe<MiteResponse>()?.data?.url ?: return
 
-        callback(
-            newExtractorLink(
+        callback.invoke(
+            ExtractorLink(
                 name,
                 name,
-                video,
+                response,
+                "$mainUrl/",
+                Qualities.P720.value,
                 INFER_TYPE
-            ) {
-                this.referer = "$mainUrl/"
-            }
+            )
         )
     }
+
+    data class MiteData(
+        @JsonProperty("original_url") val url: String?
+    )
+
+    data class MiteResponse(
+        @JsonProperty("data") val data: MiteData?
+    )
 }
 
 open class Berkasdrive : ExtractorApi() {
@@ -52,41 +57,21 @@ open class Berkasdrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val doc = app.get(url, referer = referer).document
-        val buttons = doc.select("a.btn.btn-primary.btn-block")
+        val video = app.get(url, referer = referer)
+            .document
+            .selectFirst("video#player source")
+            ?.attr("src")
+            ?: return
 
-        if (buttons.isNotEmpty()) {
-            buttons.forEach { btn ->
-                val href = btn.attr("href")
-                val quality = Regex("(\\d{3,4})p").find(btn.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
-                    ?: Qualities.Unknown.value
-
-                callback(
-                    ExtractorLink(
-                        name,
-                        "$name ${btn.text()}",
-                        href,
-                        url,
-                        quality,
-                        INFER_TYPE
-                    )
-                )
-            }
-            return
-        }
-
-        val src = doc.select("video#player source").attr("src")
-        if (src.isNotBlank()) {
-            callback(
-                ExtractorLink(
-                    name,
-                    "$name Default",
-                    src,
-                    url,
-                    Qualities.Unknown.value,
-                    INFER_TYPE
-                )
+        callback.invoke(
+            ExtractorLink(
+                name,
+                name,
+                video,
+                "$mainUrl/",
+                Qualities.P720.value,
+                INFER_TYPE
             )
-        }
+        )
     }
 }
