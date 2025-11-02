@@ -8,7 +8,7 @@ import android.content.Context
 class DramaindoPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(Dramaindo())
-        registerExtractorAPI(Mitedrive())
-        registerExtractorAPI(Berkasdrive())
+        registerExtractorAPI(MiteDrive())
+        registerExtractorAPI(BerkasDrive())
     }
 }
