@@ -37,32 +37,34 @@ class MiteDrive : ExtractorApi() {
                 val isM3u8 = videoUrl.endsWith(".m3u8")
 
                 callback(
-                    newExtractorLink(
-                        name,
-                        "$name ${qualityStr}p",
-                        videoUrl,
-                        fixedUrl,
-                        quality,
-                        isM3u8,
+                    ExtractorLink(
+                        source = name,
+                        name = "$name ${qualityStr}p",
+                        url = videoUrl,
+                        referer = fixedUrl,
+                        quality = quality,
                         headers = mapOf("Referer" to fixedUrl),
                         type = ExtractorLinkType.VIDEO
-                    )
+                    ).apply {
+                        this.isM3u8 = isM3u8
+                    }
                 )
             }
 
         Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\"").findAll(script).forEach { match ->
             val videoUrl = match.groupValues[1]
             callback(
-                newExtractorLink(
-                    name,
-                    name,
-                    videoUrl,
-                    fixedUrl,
-                    Qualities.P720.value,
-                    videoUrl.endsWith(".m3u8"),
+                ExtractorLink(
+                    source = name,
+                    name = name,
+                    url = videoUrl,
+                    referer = fixedUrl,
+                    quality = Qualities.P720.value,
                     headers = mapOf("Referer" to fixedUrl),
                     type = ExtractorLinkType.VIDEO
-                )
+                ).apply {
+                    this.isM3u8 = videoUrl.endsWith(".m3u8")
+                }
             )
         }
     }
@@ -95,18 +97,20 @@ class BerkasDrive : ExtractorApi() {
                     Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "720"
                 }
             }
+
             if (videoUrl.isNotBlank()) {
                 callback(
-                    newExtractorLink(
-                        name,
-                        "$name ${label}p",
-                        videoUrl,
-                        workingDomain,
-                        getQualityFromName("${label}p"),
-                        videoUrl.endsWith(".m3u8"),
+                    ExtractorLink(
+                        source = name,
+                        name = "$name ${label}p",
+                        url = videoUrl,
+                        referer = workingDomain,
+                        quality = getQualityFromName("${label}p"),
                         headers = mapOf("Referer" to workingDomain),
                         type = ExtractorLinkType.VIDEO
-                    )
+                    ).apply {
+                        this.isM3u8 = videoUrl.endsWith(".m3u8")
+                    }
                 )
             }
         }
@@ -119,16 +123,17 @@ class BerkasDrive : ExtractorApi() {
                     val videoUrl = match.groupValues[1]
                     val qualityStr = match.groupValues[2]
                     callback(
-                        newExtractorLink(
-                            name,
-                            "$name ${qualityStr}p",
-                            videoUrl,
-                            workingDomain,
-                            getQualityFromName("${qualityStr}p"),
-                            videoUrl.endsWith(".m3u8"),
+                        ExtractorLink(
+                            source = name,
+                            name = "$name ${qualityStr}p",
+                            url = videoUrl,
+                            referer = workingDomain,
+                            quality = getQualityFromName("${qualityStr}p"),
                             headers = mapOf("Referer" to workingDomain),
                             type = ExtractorLinkType.VIDEO
-                        )
+                        ).apply {
+                            this.isM3u8 = videoUrl.endsWith(".m3u8")
+                        }
                     )
                 }
         }
