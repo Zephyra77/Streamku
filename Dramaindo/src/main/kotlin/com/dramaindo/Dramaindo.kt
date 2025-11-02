@@ -54,9 +54,11 @@ class Dramaindo : MainAPI() {
         val infoElems = doc.select("div#informasi.info ul li")
 
         val judul = getContent(infoElems, "Judul:")?.text()?.substringAfter("Judul:")?.trim() ?: title
+        val originalTitle = getContent(infoElems, "Judul Asli:")?.selectFirst("a, span")?.text()
+            ?: getContent(infoElems, "Judul Asli:")?.text()?.substringAfter("Judul Asli:")?.trim()
         val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
         val year = getContent(infoElems, "Tahun:")?.selectFirst("a")?.text()?.toIntOrNull()
-        val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()
+        val scoreText = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()?.toDoubleOrNull()?.let { "%.1f".format(it) }
         val tipe = getContent(infoElems, "Tipe:")?.text()?.substringAfter("Tipe:")?.trim()
         val eps = parseEpisodesFromPage(doc, url)
         val isSeries = eps.isNotEmpty() || url.contains("/series/") || tipe?.contains("Drama", true) == true
@@ -70,7 +72,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (!score.isNullOrBlank()) addScore(score)
+                if (!scoreText.isNullOrBlank()) addScore(scoreText)
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -81,7 +83,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (!score.isNullOrBlank()) addScore(score)
+                if (!scoreText.isNullOrBlank()) addScore(scoreText)
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -170,13 +172,13 @@ class Dramaindo : MainAPI() {
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
-                if (!score.isNullOrBlank()) addScore(score)
+                if (score != null) addScore(score)
                 posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
-                if (!score.isNullOrBlank()) addScore(score)
+                if (score != null) addScore(score)
                 posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         }
