@@ -26,10 +26,10 @@ class MiteDrive : ExtractorApi() {
         val doc = app.get(url, referer = referer).document
 
         doc.select("script:containsData(sources), script:containsData(file)").forEach { script ->
-            Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
+            Regex("\"file\"\\s*:\\s*\"([^\"]+)\",\\s*\"label\"\\s*:\\s*\"?(\\d+)p?\"?")
                 .findAll(script.data())
                 .forEach { match ->
-                    val videoUrl = match.groupValues[1]
+                    val videoUrl = match.groupValues[1].replace("\\/", "/")
                     val qualityStr = match.groupValues[2]
                     val isM3u8 = videoUrl.endsWith(".m3u8")
                     callback(
@@ -92,10 +92,10 @@ class BerkasDrive : ExtractorApi() {
         }
 
         doc.select("script:containsData(sources), script:containsData(file)").forEach { script ->
-            Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
+            Regex("\"file\"\\s*:\\s*\"([^\"]+)\",\\s*\"label\"\\s*:\\s*\"?(\\d+)p?\"?")
                 .findAll(script.data())
                 .forEach { match ->
-                    val videoUrl = match.groupValues[1]
+                    val videoUrl = match.groupValues[1].replace("\\/", "/")
                     val qualityStr = match.groupValues[2]
                     val isM3u8 = videoUrl.endsWith(".m3u8")
                     callback(
