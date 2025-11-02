@@ -1,60 +1,56 @@
 package com.dramaindo
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
-class MiteDrive : ExtractorApi() {
-    override var name = "MiteDrive"
-    override var mainUrl = "https://mitedrive.my.id"
+open class MiteDrive : ExtractorApi() {
+    override val name = "MiteDrive"
+    override val mainUrl = "https://mitedrive.my.id"
     override val requiresReferer = true
 
     override suspend fun getUrl(
         url: String,
-        referer: String?
-    ): List<ExtractorLink>? {
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) = coroutineScope {
         val doc = app.get(url, referer = referer).document
+        val script = doc.select("script:containsData(player)")?.html() ?: return@coroutineScope
 
-        val script = doc.select("script:containsData(player)")?.html() ?: return null
+        val matches = Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script)
+        val links = matches.map { match ->
+            val videoUrl = match.groupValues[1]
+            val quality = match.groupValues[2].toIntOrNull() ?: Qualities.P720.value
+            newExtractorLink(name, "${name} ${quality}p", videoUrl, INFER_TYPE) { this.referer = url }
+        }.toList()
 
-        val videoUrl = Regex("file:\"(https[^\"]+)\"")
-            .find(script)?.groupValues?.get(1) ?: return null
-
-        return listOf(
-            newExtractorLink(
-                source = name,
-                name = "$name HD",
-                url = videoUrl
-            )
-        )
+        links.forEach { callback.invoke(it) }
     }
 }
 
-class BerkasDrive : ExtractorApi() {
-    override var name = "BerkasDrive"
-    override var mainUrl = "https://dl.berkasdrive.com"
+open class BerkasDrive : ExtractorApi() {
+    override val name = "BerkasDrive"
+    override val mainUrl = "https://dl.berkasdrive.com"
     override val requiresReferer = true
 
     override suspend fun getUrl(
         url: String,
-        referer: String?
-    ): List<ExtractorLink>? {
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) = coroutineScope {
         val doc = app.get(url, referer = referer).document
+        val sources = doc.select("video#player source")
+            .mapNotNull { src ->
+                val videoUrl = src.attr("src")
+                val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
+                newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) { this.referer = url }
+            }
 
-        val encoded = doc.select("input[name=id]").attr("value")
-        if (encoded.isNullOrEmpty()) return null
-
-        val decoded = String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT))
-
-        val text = app.get(decoded, referer = url).text
-        val finalUrl = Regex("file\":\"(https[^\"]+)\"")
-            .find(text)?.groupValues?.get(1) ?: return null
-
-        return listOf(
-            newExtractorLink(
-                source = name,
-                name = "$name HD",
-                url = finalUrl
-            )
-        )
+        sources.forEach { callback.invoke(it) }
     }
 }

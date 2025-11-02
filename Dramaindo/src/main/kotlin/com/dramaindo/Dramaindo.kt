@@ -64,10 +64,7 @@ class Dramaindo : MainAPI() {
                 || typeLower?.contains("film") == true
                 || (eps.size == 1 && url.contains("?episode=1"))
 
-        val isSeries = !forceMovie && (
-                eps.size > 1 ||
-                url.contains("/series/")
-        )
+        val isSeries = !forceMovie && (eps.size > 1 || url.contains("/series/"))
 
         val recommendations = doc.select("div.list-drama .style_post_1 article, div.idmuvi-rp ul li")
             .mapNotNull { it.toRecommendResult() }
@@ -120,7 +117,6 @@ class Dramaindo : MainAPI() {
         val doc = app.get(data, interceptor = interceptor).document
 
         doc.select("iframe[src]").mapNotNull { it.attr("src") }.map { found.add(it) }
-
         doc.select(".streaming-box, .streaming_load[data]").mapNotNull {
             base64Decode(it.attr("data")).let { decoded ->
                 Regex("https?://[^\"]+").find(decoded)?.value
