@@ -53,13 +53,21 @@ class Dramaindo : MainAPI() {
         val infoElems = doc.select("div#informasi.info ul li")
 
         val judul = getContent(infoElems, "Judul:")?.text()?.substringAfter("Judul:")?.trim() ?: title
-        val originalTitle = getContent(infoElems, "Judul Asli:")?.selectFirst("a, span")?.text()
-            ?: getContent(infoElems, "Judul Asli:")?.text()?.substringAfter("Judul Asli:")?.trim()
         val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
         val year = getContent(infoElems, "Tahun:")?.selectFirst("a")?.text()?.toIntOrNull()
         val tipe = getContent(infoElems, "Tipe:")?.text()?.substringAfter("Tipe:")?.trim()
-        val eps = parseEpisodesFromPage(doc, url)
-        val isSeries = eps.isNotEmpty() || url.contains("/series/") || tipe?.contains("Drama", true) == true
+
+        val eps = parseEpisodesFromPage(doc)
+        val typeLower = tipe?.lowercase()
+
+        val forceMovie = typeLower?.contains("movie") == true
+                || typeLower?.contains("film") == true
+                || (eps.size == 1 && url.contains("?episode=1"))
+
+        val isSeries = !forceMovie && (
+                eps.size > 1 ||
+                url.contains("/series/")
+        )
 
         val recommendations = doc.select("div.list-drama .style_post_1 article, div.idmuvi-rp ul li")
             .mapNotNull { it.toRecommendResult() }
@@ -67,6 +75,7 @@ class Dramaindo : MainAPI() {
         if (isSeries) {
             newTvSeriesLoadResponse(judul.ifBlank { title }, url, TvType.AsianDrama, eps) {
                 posterUrl = poster
+                posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
                 plot = synopsis
                 this.year = year
                 this.tags = genres
@@ -77,6 +86,7 @@ class Dramaindo : MainAPI() {
         } else {
             newMovieLoadResponse(judul.ifBlank { title }, url, TvType.Movie, url) {
                 posterUrl = poster
+                posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
                 plot = synopsis
                 this.year = year
                 this.tags = genres
@@ -87,31 +97,17 @@ class Dramaindo : MainAPI() {
         }
     }
 
-    private fun parseEpisodesFromPage(doc: Document, pageUrl: String): List<Episode> {
-        val eps = mutableListOf<Episode>()
-        val listSelectors = listOf(
-            "ul.episode-list li a",
-            ".daftar-episode li a",
-            "div.list-episode-streaming ul.episode-list li a"
-        )
-        for (sel in listSelectors) {
-            val els = doc.select(sel)
-            if (els.isNotEmpty()) {
-                for (a in els) {
-                    val name = a.text().trim()
-                    if (name.isBlank()) continue
-                    val href = a.attr("href").takeIf { it.isNotBlank() } ?: continue
-                    val absolute = fixUrl(href)
-                    val epNum = Regex("(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                    eps.add(newEpisode(absolute).apply {
-                        this.name = name
-                        this.episode = epNum
-                    })
+    private fun parseEpisodesFromPage(doc: Document): List<Episode> {
+        return doc.select("ul.episode-list li a, .daftar-episode li a, div.list-episode-streaming ul.episode-list li a")
+            .mapNotNull { a ->
+                val name = a.text().trim().ifBlank { return@mapNotNull null }
+                val href = a.attr("href").ifBlank { return@mapNotNull null }
+                val epNum = Regex("(\\d+)").find(name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                newEpisode(fixUrl(href)).apply {
+                    this.name = name
+                    this.episode = epNum
                 }
-                if (eps.isNotEmpty()) return eps
             }
-        }
-        return eps
     }
 
     override suspend fun loadLinks(
@@ -121,34 +117,22 @@ class Dramaindo : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val found = mutableSetOf<String>()
-        val res = app.get(data, interceptor = interceptor)
-        val doc = res.document
+        val doc = app.get(data, interceptor = interceptor).document
 
-        doc.select("iframe").mapNotNull { it.attr("src")?.takeIf { it.isNotBlank() } }
-            .forEach { found.add(it) }
+        doc.select("iframe[src]").mapNotNull { it.attr("src") }.map { found.add(it) }
 
-        doc.select(".streaming-box, .streaming_load").mapNotNull {
-            val b64 = it.attr("data").takeIf { s -> s.isNotBlank() }
-            if (!b64.isNullOrBlank()) {
-                val decoded = base64Decode(b64)
-                Regex("src\\s*=\\s*\"([^\"]+)\"").find(decoded)?.groupValues?.getOrNull(1)
-                    ?: Regex("https?://[\\w./\\-?=&%]+").find(decoded)?.groupValues?.getOrNull(0)
-            } else null
-        }.forEach { found.add(it) }
-
-        doc.select(".link_download a, .download-box a, a[href]").mapNotNull { a ->
-            val href = a.attr("href").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            if (href.contains("berkasdrive", true) || href.contains("mitedrive", true) ||
-                href.contains("drive", true) || href.contains("streaming", true)
-            ) href else null
-        }.forEach { found.add(it) }
-
-        found.map { url ->
-            async {
-                runCatching {
-                    loadExtractor(url, data, subtitleCallback, callback)
-                }
+        doc.select(".streaming-box, .streaming_load[data]").mapNotNull {
+            base64Decode(it.attr("data")).let { decoded ->
+                Regex("https?://[^\"]+").find(decoded)?.value
             }
+        }.map { found.add(it) }
+
+        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']")
+            .mapNotNull { it.attr("href") }
+            .map { found.add(it) }
+
+        found.map {
+            async { runCatching { loadExtractor(it, data, subtitleCallback, callback) } }
         }.awaitAll()
 
         found.isNotEmpty()
@@ -160,6 +144,7 @@ class Dramaindo : MainAPI() {
         val href = titleEl.attr("href")
         val poster = selectFirst("div.thumbnail img, img")?.getImage()
         val isSeries = href.contains("/series/") || title.contains("Episode", true)
+
         return if (isSeries) {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
@@ -174,35 +159,28 @@ class Dramaindo : MainAPI() {
     }
 
     private fun Element.toRecommendResult(): SearchResponse? {
-        val t = selectFirst("a > span.idmuvi-rp-title, .idmuvi-rp-title, a")?.text()?.trim() ?: return null
-        val title = t.substringBefore("Season").substringBefore("Episode").substringBefore("Eps")
+        val text = selectFirst("a > span.idmuvi-rp-title, .idmuvi-rp-title, a")?.text()?.trim() ?: return null
+        val title = text.substringBefore("Season").substringBefore("Episode").substringBefore("Eps")
         val href = selectFirst("a")?.attr("href") ?: return null
         val poster = selectFirst("img")?.getImage()
         return newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
     }
 
     private fun Element.getImage(): String? {
-        return attr("srcset")
-            .takeIf { it.isNotBlank() }
-            ?.split(",")
-            ?.map { it.trim().split("\\s+".toRegex()) }
-            ?.maxByOrNull { it.getOrNull(1)?.replace("w", "")?.toIntOrNull() ?: 0 }
+        return attr("srcset").takeIf { it.isNotBlank() }?.split(",")
+            ?.map { it.trim().split(" ") }
+            ?.maxByOrNull { it.getOrNull(1)?.removeSuffix("w")?.toIntOrNull() ?: 0 }
             ?.firstOrNull()
-            ?: attr("data-src")
-                .ifBlank { attr("data-lazy-src") }
-                .ifBlank { attr("src") }
+            ?: attr("data-src").ifBlank { attr("data-lazy-src") }.ifBlank { attr("src") }
                 ?.replace(Regex("-\\d+x\\d+"), "")
     }
 
     private fun getContent(elements: Elements, text: String): Element? {
-        return elements.firstOrNull { el -> el.selectFirst("strong")?.text()?.trim() == text }
+        return elements.firstOrNull { it.selectFirst("strong")?.text()?.trim() == text }
     }
 
     private fun base64Decode(s: String): String {
-        return try {
-            String(android.util.Base64.decode(s, android.util.Base64.DEFAULT))
-        } catch (_: Throwable) {
-            ""
-        }
+        return runCatching { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)) }
+            .getOrElse { "" }
     }
 }
