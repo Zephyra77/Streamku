@@ -2,8 +2,33 @@ package com.dramaindo
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
+
+object Extractors {
+    private val miteDrive = MiteDrive()
+    private val berkasDrive = BerkasDrive()
+
+    suspend fun loadAllLinks(
+        urls: List<String>,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) = coroutineScope {
+        urls.map { url ->
+            async {
+                runCatching {
+                    when {
+                        "mitedrive" in url -> miteDrive.getUrl(url, referer, subtitleCallback, callback)
+                        "berkasdrive" in url -> berkasDrive.getUrl(url, referer, subtitleCallback, callback)
+                    }
+                }
+            }
+        }.awaitAll()
+    }
+}
 
 class MiteDrive : ExtractorApi() {
     override val name = "MiteDrive"
@@ -26,10 +51,10 @@ class MiteDrive : ExtractorApi() {
         val doc = app.get(url, referer = referer).document
 
         doc.select("script:containsData(sources), script:containsData(file)").forEach { script ->
-            Regex("\"file\"\\s*:\\s*\"([^\"]+)\",\\s*\"label\"\\s*:\\s*\"?(\\d+)p?\"?")
+            Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
                 .findAll(script.data())
                 .forEach { match ->
-                    val videoUrl = match.groupValues[1].replace("\\/", "/")
+                    val videoUrl = match.groupValues[1]
                     val qualityStr = match.groupValues[2]
                     val isM3u8 = videoUrl.endsWith(".m3u8")
                     callback(
@@ -92,10 +117,10 @@ class BerkasDrive : ExtractorApi() {
         }
 
         doc.select("script:containsData(sources), script:containsData(file)").forEach { script ->
-            Regex("\"file\"\\s*:\\s*\"([^\"]+)\",\\s*\"label\"\\s*:\\s*\"?(\\d+)p?\"?")
+            Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
                 .findAll(script.data())
                 .forEach { match ->
-                    val videoUrl = match.groupValues[1].replace("\\/", "/")
+                    val videoUrl = match.groupValues[1]
                     val qualityStr = match.groupValues[2]
                     val isM3u8 = videoUrl.endsWith(".m3u8")
                     callback(
