@@ -72,7 +72,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (!score.isNullOrBlank()) addScore("%.1f".format(score.toDouble()))
+                if (!score.isNullOrBlank()) addScore(score) // gunakan string langsung
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
@@ -83,7 +83,7 @@ class Dramaindo : MainAPI() {
                 plot = synopsis
                 this.year = year
                 this.tags = genres
-                if (!score.isNullOrBlank()) addScore("%.1f".format(score.toDouble()))
+                if (!score.isNullOrBlank()) addScore(score) // gunakan string langsung
                 addActors(doc.select("span[itemprop=actors] a").map { it.text() })
                 this.recommendations = recommendations
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
