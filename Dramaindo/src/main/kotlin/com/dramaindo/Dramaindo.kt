@@ -11,6 +11,7 @@ import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
+import org.json.JSONObject
 
 class Dramaindo : MainAPI() {
     override var mainUrl = "https://drama-id.com"
@@ -78,6 +79,12 @@ class Dramaindo : MainAPI() {
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
             }
         } else {
+            val episodeList = listOf(
+                newEpisode(url).apply {
+                    this.name = judul.ifBlank { title }
+                    this.episode = 1
+                }
+            )
             newMovieLoadResponse(judul.ifBlank { title }, url, TvType.Movie, url) {
                 posterUrl = poster
                 posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
@@ -111,21 +118,38 @@ class Dramaindo : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val found = mutableSetOf<String>()
-        val doc = app.get(data, interceptor = interceptor).document
+        val res = app.get(data, interceptor = interceptor)
+        val doc = res.document
+
+        doc.select(".streaming-box[data], [data-src]").mapNotNull { it.attr("data").ifBlank { it.attr("data-src") } }
+            .forEach { encoded ->
+                val decoded = base64Decode(encoded)
+                Regex("https?://[^\"]+").findAll(decoded).map { it.value }
+                    .filter { it.startsWith("http") }
+                    .forEach { found.add(it) }
+            }
+
+        doc.select(".resolusi-list li[data]").forEach { li ->
+            val encoded = li.attr("data")
+            val decoded = base64Decode(encoded)
+            if (decoded.contains("links")) {
+                runCatching {
+                    val json = JSONObject(decoded)
+                    val links = json.optJSONArray("links")
+                    if (links != null) {
+                        for (i in 0 until links.length()) {
+                            val linkObj = links.getJSONObject(i)
+                            val url = linkObj.optString("url")
+                            if (url.startsWith("http")) found.add(url)
+                        }
+                    }
+                }
+            }
+        }
 
         doc.select("iframe[src]").mapNotNull { it.attr("src") }
             .filter { it.startsWith("http") }
             .forEach { found.add(it) }
-
-        doc.select(".streaming-box[data], [data-src]")
-            .mapNotNull { it.attr("data").ifBlank { it.attr("data-src") } }
-            .forEach { encoded ->
-                val decoded = base64Decode(encoded)
-                Regex("https?://[^\"]+").findAll(decoded)
-                    .map { it.value }
-                    .filter { it.startsWith("http") }
-                    .forEach { found.add(it) }
-            }
 
         doc.select("a[href]").mapNotNull { it.attr("href") }
             .filter {
