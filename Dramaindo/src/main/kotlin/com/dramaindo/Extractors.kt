@@ -22,7 +22,7 @@ class MiteDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        val fixedUrl = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
+        var fixedUrl = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
         val doc = app.get(url, referer = referer).document
         val script = doc.select("script:containsData(sources)").firstOrNull()?.data()
             ?: doc.select("script:containsData(player)").firstOrNull()?.data()
@@ -87,7 +87,7 @@ class BerkasDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        val workingDomain = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
+        var workingDomain = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
         val doc = app.get(url, referer = referer).document
 
         doc.select("video source").forEach { src ->
