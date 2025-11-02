@@ -116,15 +116,36 @@ class Dramaindo : MainAPI() {
         val found = mutableSetOf<String>()
         val doc = app.get(data, interceptor = interceptor).document
 
-        doc.select("iframe[src]").mapNotNull { it.attr("src") }.map { found.add(it) }
-        doc.select(".streaming-box, .streaming_load[data]").mapNotNull {
-            base64Decode(it.attr("data")).let { decoded ->
-                Regex("https?://[^\"]+").find(decoded)?.value
-            }
-        }.map { found.add(it) }
-        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']").mapNotNull { it.attr("href") }.map { found.add(it) }
+        doc.select("iframe[src]").mapNotNull { it.attr("src") }
+            .filter { it.startsWith("http") }
+            .forEach { found.add(it) }
 
-        found.map { url ->
+        doc.select(".streaming-box, .streaming_load[data], [data-src]")
+            .mapNotNull { it.attr("data").ifBlank { it.attr("data-src") } }
+            .forEach { encoded ->
+                val decoded = base64Decode(encoded)
+                Regex("https?://[^\"]+").findAll(decoded)
+                    .map { it.value }
+                    .filter { it.startsWith("http") }
+                    .forEach { found.add(it) }
+            }
+
+        doc.select("a[href]").mapNotNull { it.attr("href") }
+            .filter {
+                it.contains("berkas", true) ||
+                it.contains("drive", true) ||
+                it.contains("stream", true) ||
+                it.contains("file", true)
+            }
+            .forEach { found.add(it) }
+
+        val filtered = found.filter {
+            it.startsWith("http") &&
+            !it.contains("facebook.com") &&
+            !it.contains("instagram.com")
+        }.distinct()
+
+        filtered.map { url ->
             async {
                 runCatching {
                     extractors.forEach { ext ->
@@ -134,7 +155,7 @@ class Dramaindo : MainAPI() {
             }
         }.awaitAll()
 
-        found.isNotEmpty()
+        filtered.isNotEmpty()
     }
 
     private fun Element.toSearchResult(): SearchResponse? {

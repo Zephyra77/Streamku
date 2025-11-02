@@ -9,51 +9,116 @@ open class MiteDrive : ExtractorApi() {
     override val mainUrl = "https://mitedrive.my.id"
     override val requiresReferer = true
 
+    private val altDomains = listOf(
+        "https://mitedrive.my.id",
+        "https://mitedrive.lol",
+        "https://mitedrive.cloud"
+    )
+
     override suspend fun getUrl(
         url: String,
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ) {
-        coroutineScope {
-            val doc = app.get(url, referer = referer).document
-            val script = doc.select("script:containsData(player)").firstOrNull()?.html() ?: return@coroutineScope
+    ) = coroutineScope {
+        val fixedUrl = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
+        val doc = app.get(url, referer = referer).document
+        val script = doc.select("script:containsData(sources)").firstOrNull()?.data()
+            ?: doc.select("script:containsData(player)").firstOrNull()?.data()
+            ?: return@coroutineScope
 
-            Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script).forEach { match ->
+        Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
+            .findAll(script)
+            .forEach { match ->
                 val videoUrl = match.groupValues[1]
                 val quality = match.groupValues[2].toIntOrNull() ?: Qualities.P720.value
                 callback(
-                    newExtractorLink(name, "${name} ${quality}p", videoUrl, INFER_TYPE) {
-                        this.referer = url
-                    }
+                    ExtractorLink(
+                        name = "$name ${quality}p",
+                        source = name,
+                        url = videoUrl,
+                        referer = fixedUrl,
+                        quality = getQualityFromName("${quality}p"),
+                        isM3u8 = videoUrl.endsWith(".m3u8")
+                    )
                 )
             }
+
+        Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\"").findAll(script).forEach { match ->
+            val videoUrl = match.groupValues[1]
+            callback(
+                ExtractorLink(
+                    name = name,
+                    source = name,
+                    url = videoUrl,
+                    referer = fixedUrl,
+                    quality = Qualities.P720.value,
+                    isM3u8 = videoUrl.endsWith(".m3u8")
+                )
+            )
         }
     }
 }
 
 open class BerkasDrive : ExtractorApi() {
     override val name = "BerkasDrive"
-    override val mainUrl = "https://dl.berkasdrive.com"
+    override val mainUrl = "https://berkasdrive.com"
     override val requiresReferer = true
+
+    private val altDomains = listOf(
+        "https://berkasdrive.com",
+        "https://dl.berkasdrive.com",
+        "https://berkasdrive.net"
+    )
 
     override suspend fun getUrl(
         url: String,
         referer: String?,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ) {
-        coroutineScope {
-            val doc = app.get(url, referer = referer).document
-            val sources = doc.select("video#player source").mapNotNull { src ->
-                val videoUrl = src.attr("src")
-                val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
-                newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) {
-                    this.referer = url
+    ) = coroutineScope {
+        val workingDomain = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
+        val doc = app.get(url, referer = referer).document
+
+        doc.select("video source").forEach { src ->
+            val videoUrl = src.attr("src").trim()
+            val label = src.attr("label").ifBlank {
+                src.attr("res").ifBlank {
+                    Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "720"
                 }
             }
+            if (videoUrl.isNotBlank()) {
+                callback(
+                    ExtractorLink(
+                        name = "$name ${label}p",
+                        source = name,
+                        url = videoUrl,
+                        referer = workingDomain,
+                        quality = getQualityFromName("${label}p"),
+                        isM3u8 = videoUrl.endsWith(".m3u8")
+                    )
+                )
+            }
+        }
 
-            sources.forEach { callback(it) }
+        val script = doc.select("script:containsData(sources)").firstOrNull()?.data()
+        if (script != null) {
+            Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
+                .findAll(script)
+                .forEach { match ->
+                    val videoUrl = match.groupValues[1]
+                    val quality = match.groupValues[2].toIntOrNull() ?: 720
+                    callback(
+                        ExtractorLink(
+                            name = "$name ${quality}p",
+                            source = name,
+                            url = videoUrl,
+                            referer = workingDomain,
+                            quality = getQualityFromName("${quality}p"),
+                            isM3u8 = videoUrl.endsWith(".m3u8")
+                        )
+                    )
+                }
         }
     }
 }
