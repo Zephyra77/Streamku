@@ -22,7 +22,7 @@ class MiteDrive : ExtractorApi() {
             ?: return null
 
         return listOf(
-            ExtractorLink(
+            newExtractorLink(
                 source = name,
                 name = "$name HD",
                 url = videoUrl,
@@ -55,7 +55,7 @@ class BerkasDrive : ExtractorApi() {
             ?: return null
 
         return listOf(
-            ExtractorLink(
+            newExtractorLink(
                 source = name,
                 name = "$name HD",
                 url = finalUrl,
