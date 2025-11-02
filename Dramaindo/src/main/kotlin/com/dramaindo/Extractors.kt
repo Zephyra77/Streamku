@@ -1,62 +1,66 @@
 package com.dramaindo
 
-import com.fasterxml.jackson.annotation.JsonProperty
-import com.lagradost.cloudstream3.SubtitleFile
-import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.extractors.ExtractorApi
+import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.newExtractorLink
+import org.jsoup.Jsoup
 
-class BerkasDrive : ExtractorApi() {
-    override val name = "BerkasDrive"
-    override val mainUrl = "https://dl.berkasdrive.com"
+class Mitedrive : ExtractorApi() {
+    override var name = "Mitedrive"
+    override var mainUrl = "https://mitedrive.my.id"
     override val requiresReferer = true
 
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val doc = app.get(url, referer = referer).document
-        val videoUrl = doc.select("video#player source").attr("src")
+    override suspend fun getUrl(url: String, referer: String?): List<com.lagradost.cloudstream3.ExtractorLink> {
+        val doc = app.get(url).document
 
-        if (videoUrl.isNullOrBlank()) return
+        val script = doc.select("script:containsData(player)")?.html()
+            ?: return emptyList()
 
-        callback.invoke(
+        val videoUrl = Regex("file:\"(https[^\"]+)\"")
+            .find(script)?.groupValues?.get(1)
+            ?: return emptyList()
+
+        return listOf(
             newExtractorLink(
                 source = name,
-                name = "${name} Auto",
+                name = "$name HD",
                 url = videoUrl,
-                quality = getQualityFromName(videoUrl),
-                headers = mapOf("Referer" to mainUrl)
+                referer = url,
+                quality = Qualities.P720.value,
+                type = ExtractorLinkType.VIDEO
             )
         )
     }
 }
 
-class MiteDrive : ExtractorApi() {
-    override val name = "MiteDrive"
-    override val mainUrl = "https://mitedrive.com"
-    override val requiresReferer = false
+class Berkasdrive : ExtractorApi() {
+    override var name = "Berkasdrive"
+    override var mainUrl = "https://dl.berkasdrive.com"
+    override val requiresReferer = true
 
-    data class Data(@JsonProperty("original_url") val url: String? = null)
-    data class Responses(@JsonProperty("data") val data: Data? = null)
+    override suspend fun getUrl(url: String, referer: String?): List<com.lagradost.cloudstream3.ExtractorLink> {
+        val res = app.get(url)
+        val doc = res.document
 
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val id = url.substringAfterLast("/")
-        val realUrl =
-            app.post("https://api.mitedrive.com/api/view/$id")
-                .parsedSafe<Responses>()?.data?.url ?: return
+        val encoded = doc.select("input[name=id]").attr("value")
+        val decoded = String(android.util.Base64.decode(encoded, android.util.Base64.DEFAULT))
 
-        callback.invoke(
+        val redirectPage = app.get(decoded, referer = url).text
+
+        val finalUrl = Regex("file\":\"(https[^\"]+)\"")
+            .find(redirectPage)?.groupValues?.get(1)
+            ?: return emptyList()
+
+        return listOf(
             newExtractorLink(
                 source = name,
-                name = "${name} Auto",
-                url = realUrl
+                name = "$name HD",
+                url = finalUrl,
+                referer = decoded,
+                quality = Qualities.P720.value,
+                type = ExtractorLinkType.VIDEO
             )
         )
     }
