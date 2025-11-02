@@ -12,16 +12,17 @@ class MiteDrive : ExtractorApi() {
     data class Data(@JsonProperty("original_url") val url: String? = null)
     data class Responses(@JsonProperty("data") val data: Data? = null)
 
-    private fun extractId(url: String): String {
-        if (url.contains("id=")) {
-            val encoded = url.substringAfter("id=")
-            return base64Decode(encoded).substringAfterLast("/")
-        }
-        return url.substringAfterLast("/")
+    private fun decode(input: String): String {
+        return String(android.util.Base64.decode(input, android.util.Base64.DEFAULT))
     }
 
-    private fun base64Decode(str: String): String {
-        return String(android.util.Base64.decode(str, android.util.Base64.DEFAULT))
+    private fun extractId(url: String): String {
+        return if (url.contains("id=")) {
+            val encoded = url.substringAfter("id=")
+            decode(encoded).substringAfterLast("/")
+        } else {
+            url.substringAfterLast("/")
+        }
     }
 
     override suspend fun getUrl(
@@ -30,19 +31,22 @@ class MiteDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
+
         val id = extractId(url)
-        val video = app.post(
-            "https://api.mitedrive.com/api/view/$id",
-            referer = "$mainUrl/"
-        ).parsedSafe<Responses>()?.data?.url ?: return
+        val api = "https://api.mitedrive.com/api/view/$id"
+
+        val response = app.post(api, referer = "$mainUrl/")
+            .parsedSafe<Responses>()?.data?.url ?: return
+
+        val file = response.lowercase()
 
         callback.invoke(
             newExtractorLink(
                 name,
                 name,
-                video,
+                response,
                 referer = mainUrl,
-                quality = getQualityFromName(video)
+                type = if (file.endsWith(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             )
         )
     }
@@ -59,17 +63,20 @@ class BerkasDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
+
         val doc = app.get(url, referer = referer).document
         val video = doc.select("video#player source").attr("src")
         if (video.isNullOrBlank()) return
+
+        val file = video.lowercase()
 
         callback.invoke(
             newExtractorLink(
                 name,
                 name,
                 video,
-                mainUrl,
-                quality = getQualityFromName(video)
+                referer = mainUrl,
+                type = if (file.endsWith(".m3u8")) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
             )
         )
     }
