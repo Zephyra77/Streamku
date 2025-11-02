@@ -43,7 +43,9 @@ open class BerkasDrive : ExtractorApi() {
         val sources = doc.select("video#player source").mapNotNull { src ->
             val videoUrl = src.attr("src").takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
-            newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) { this.referer = url }
+            newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) {
+                this.referer = url
+            }
         }
 
         sources.forEach { callback(it) }
