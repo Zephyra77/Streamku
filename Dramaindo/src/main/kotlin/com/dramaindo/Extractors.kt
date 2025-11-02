@@ -18,8 +18,7 @@ open class MiteDrive : ExtractorApi() {
         val doc = app.get(url, referer = referer).document
         val script = doc.select("script:containsData(player)").firstOrNull()?.html() ?: return@coroutineScope
 
-        val matches = Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script)
-        matches.map { match ->
+        Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script).map { match ->
             val videoUrl = match.groupValues[1]
             val quality = match.groupValues[2].toIntOrNull() ?: Qualities.P720.value
             newExtractorLink(name, "${name} ${quality}p", videoUrl, INFER_TYPE) {
@@ -41,14 +40,11 @@ open class BerkasDrive : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
         val doc = app.get(url, referer = referer).document
-        val sources = doc.select("video#player source")
-            .mapNotNull { src ->
-                val videoUrl = src.attr("src").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
-                newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) {
-                    this.referer = url
-                }
-            }
+        val sources = doc.select("video#player source").mapNotNull { src ->
+            val videoUrl = src.attr("src").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
+            newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) { this.referer = url }
+        }
 
         sources.forEach { callback(it) }
     }
