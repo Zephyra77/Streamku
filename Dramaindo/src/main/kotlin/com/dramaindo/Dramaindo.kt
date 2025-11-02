@@ -59,13 +59,10 @@ class Dramaindo : MainAPI() {
 
         val eps = parseEpisodesFromPage(doc)
         val typeLower = tipe?.lowercase()
-
         val forceMovie = typeLower?.contains("movie") == true
                 || typeLower?.contains("film") == true
                 || (eps.size == 1 && url.contains("?episode=1"))
-
         val isSeries = !forceMovie && (eps.size > 1 || url.contains("/series/"))
-
         val recommendations = doc.select("div.list-drama .style_post_1 article, div.idmuvi-rp ul li")
             .mapNotNull { it.toRecommendResult() }
 
@@ -116,18 +113,19 @@ class Dramaindo : MainAPI() {
         val found = mutableSetOf<String>()
         val doc = app.get(data, interceptor = interceptor).document
 
-        doc.select("iframe[src]").mapNotNull { it.attr("src") }.forEach { found.add(it) }
+        doc.select("iframe[src]").mapNotNull { it.attr("src") }.map { found.add(it) }
         doc.select(".streaming-box, .streaming_load[data]").mapNotNull {
             base64Decode(it.attr("data")).let { decoded ->
-                Regex("https?://[^\"]+").find(decoded)?.value
+                Regex("https?://[^\"]+").findAll(decoded).map { it.value }.forEach { found.add(it) }
             }
-        }.forEach { found.add(it) }
+        }
+        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']")
+            .mapNotNull { it.attr("href") }
+            .map { found.add(it) }
+        doc.select("video source").mapNotNull { it.attr("src") }.map { found.add(it) }
 
-        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']").mapNotNull { it.attr("href") }
-            .forEach { found.add(it) }
-
-        found.map { link ->
-            async { runCatching { loadExtractor(link, data, subtitleCallback, callback) } }
+        found.map { url ->
+            async { runCatching { loadExtractor(url, data, subtitleCallback, callback) } }
         }.awaitAll()
 
         found.isNotEmpty()
