@@ -21,7 +21,6 @@ class Dramaindo : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
     private val interceptor by lazy { CloudflareKiller() }
-    private val extractors by lazy { listOf(MiteDrive(), BerkasDrive()) }
 
     override val mainPage = mainPageOf(
         "" to "Rilisan Terbaru",
@@ -79,12 +78,6 @@ class Dramaindo : MainAPI() {
                 addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
             }
         } else {
-            val episodeList = listOf(
-                newEpisode(url).apply {
-                    this.name = judul.ifBlank { title }
-                    this.episode = 1
-                }
-            )
             newMovieLoadResponse(judul.ifBlank { title }, url, TvType.Movie, url) {
                 posterUrl = poster
                 posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
@@ -121,7 +114,7 @@ class Dramaindo : MainAPI() {
         val res = app.get(data, interceptor = interceptor)
         val doc = res.document
 
-        doc.select(".streaming-box[data], [data-src]").mapNotNull { it.attr("data").ifBlank { it.attr("data-src") } }
+        doc.select("div.streaming-box[data], [data-src]").mapNotNull { it.attr("data").ifBlank { it.attr("data-src") } }
             .forEach { encoded ->
                 val decoded = base64Decode(encoded)
                 Regex("https?://[^\"]+").findAll(decoded).map { it.value }
@@ -151,14 +144,6 @@ class Dramaindo : MainAPI() {
             .filter { it.startsWith("http") }
             .forEach { found.add(it) }
 
-        doc.select("a[href]").mapNotNull { it.attr("href") }
-            .filter {
-                it.contains("berkas", true) ||
-                it.contains("mitedrive", true) ||
-                it.contains("drive", true)
-            }
-            .forEach { found.add(it) }
-
         val filtered = found.filter {
             it.startsWith("http") &&
             !it.contains("facebook") &&
@@ -168,8 +153,9 @@ class Dramaindo : MainAPI() {
         filtered.map { url ->
             async {
                 runCatching {
-                    extractors.forEach { ext ->
-                        ext.getUrl(url, data, subtitleCallback, callback)
+                    when {
+                        "mitedrive" in url -> MiteDrive().getUrl(url, data, subtitleCallback, callback)
+                        "berkasdrive" in url -> BerkasDrive().getUrl(url, data, subtitleCallback, callback)
                     }
                 }
             }
