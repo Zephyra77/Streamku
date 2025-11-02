@@ -17,7 +17,7 @@ open class MiteDrive : ExtractorApi() {
     ) {
         coroutineScope {
             val doc = app.get(url, referer = referer).document
-            val script = doc.select("script:containsData(player)")?.html() ?: return@coroutineScope
+            val script = doc.select("script:containsData(player)").firstOrNull()?.html() ?: return@coroutineScope
 
             val matches = Regex("file:\"(https[^\"]+)\",label:\"(\\d+)p\"").findAll(script)
             val links = matches.map { match ->
@@ -44,13 +44,11 @@ open class BerkasDrive : ExtractorApi() {
     ) {
         coroutineScope {
             val doc = app.get(url, referer = referer).document
-            val sources = doc.select("video#player source")
-                .mapNotNull { src ->
-                    val videoUrl = src.attr("src")
-                    val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
-                    newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) { this.referer = url }
-                }
-
+            val sources = doc.select("video#player source").mapNotNull { src ->
+                val videoUrl = src.attr("src").ifBlank { return@mapNotNull null }
+                val label = src.attr("label").takeIf { it.isNotBlank() } ?: "720"
+                newExtractorLink(name, "${name} ${label}p", videoUrl, INFER_TYPE) { this.referer = url }
+            }
             sources.forEach { callback.invoke(it) }
         }
     }
