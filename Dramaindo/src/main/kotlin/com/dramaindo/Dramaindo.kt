@@ -116,19 +116,22 @@ class Dramaindo : MainAPI() {
         val found = mutableSetOf<String>()
         val doc = app.get(data, interceptor = interceptor).document
 
-        doc.select("iframe[src]").mapNotNull { it.attr("src") }.map { found.add(it) }
-        doc.select(".streaming-box, .streaming_load[data]").mapNotNull {
-            base64Decode(it.attr("data")).let { decoded ->
-                Regex("https?://[^\"]+").find(decoded)?.value
+        doc.select("iframe[src], .streaming-box, .streaming_load[data]").forEach { element ->
+            val url = element.attr("src").takeIf { it.isNotBlank() }
+                ?: runCatching { String(android.util.Base64.decode(element.attr("data"), android.util.Base64.DEFAULT)) }
+                    .getOrNull()
+            if (!url.isNullOrBlank()) found.add(url)
+        }
+
+        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']").mapNotNull { it.attr("href") }
+            .forEach { found.add(it) }
+
+        found.map { url ->
+            async {
+                runCatching {
+                    BerkasDrive().getUrl(url, referer = data, subtitleCallback = subtitleCallback, callback = callback)
+                }
             }
-        }.map { found.add(it) }
-
-        doc.select("a[href*='berkas'], a[href*='drive'], a[href*='stream']")
-            .mapNotNull { it.attr("href") }
-            .map { found.add(it) }
-
-        found.map {
-            async { runCatching { loadExtractor(it, data, subtitleCallback, callback) } }
         }.awaitAll()
 
         found.isNotEmpty()
@@ -173,10 +176,5 @@ class Dramaindo : MainAPI() {
 
     private fun getContent(elements: Elements, text: String): Element? {
         return elements.firstOrNull { it.selectFirst("strong")?.text()?.trim() == text }
-    }
-
-    private fun base64Decode(s: String): String {
-        return runCatching { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)) }
-            .getOrElse { "" }
     }
 }
