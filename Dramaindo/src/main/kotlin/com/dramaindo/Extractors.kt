@@ -71,7 +71,11 @@ class BerkasDrive : ExtractorApi() {
         doc.select("video source").forEach { src ->
             val videoUrl = src.attr("src").trim()
             if (videoUrl.isNotBlank()) {
-                val label = src.attr("label").ifBlank { src.attr("res").ifBlank { Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "360" } }
+                val label = src.attr("label").ifBlank {
+                    src.attr("res").ifBlank {
+                        Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "360"
+                    }
+                }
                 val isM3u8 = videoUrl.endsWith(".m3u8")
                 callback(
                     ExtractorLink(
@@ -108,21 +112,22 @@ class BerkasDrive : ExtractorApi() {
                 }
         }
 
-        doc.select("[data-video], [data-src]").mapNotNull { it.attr("data-video").ifBlank { it.attr("data-src") } }
-            .forEach { videoUrl ->
-                val label = Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "360"
-                val isM3u8 = videoUrl.endsWith(".m3u8")
-                callback(
-                    ExtractorLink(
-                        source = name,
-                        name = "$name ${label}p",
-                        url = videoUrl,
-                        referer = workingDomain,
-                        quality = getQualityFromName("${label}p"),
-                        headers = mapOf("Referer" to workingDomain),
-                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                    )
+        doc.select("[data-video], [data-src]").mapNotNull {
+            it.attr("data-video").ifBlank { it.attr("data-src") }
+        }.forEach { videoUrl ->
+            val label = Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "360"
+            val isM3u8 = videoUrl.endsWith(".m3u8")
+            callback(
+                ExtractorLink(
+                    source = name,
+                    name = "$name ${label}p",
+                    url = videoUrl,
+                    referer = workingDomain,
+                    quality = getQualityFromName("${label}p"),
+                    headers = mapOf("Referer" to workingDomain),
+                    type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                 )
-            }
+            )
+        }
     }
 }
