@@ -19,6 +19,7 @@ class Dramaindo : MainAPI() {
     override var lang = "id"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
+
     private val interceptor by lazy { CloudflareKiller() }
 
     override val mainPage = mainPageOf(
@@ -53,50 +54,41 @@ class Dramaindo : MainAPI() {
         val infoElems = doc.select("div#informasi.info ul li")
 
         val judul = getContent(infoElems, "Judul:")?.text()?.substringAfter("Judul:")?.trim() ?: title
+        val originalTitle = getContent(infoElems, "Judul Asli:")?.selectFirst("a, span")?.text()
+            ?: getContent(infoElems, "Judul Asli:")?.text()?.substringAfter("Judul Asli:")?.trim()
+        val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
         val year = getContent(infoElems, "Tahun:")?.selectFirst("a")?.text()?.toIntOrNull()
         val score = getContent(infoElems, "Skor:")?.text()?.substringAfter("Skor:")?.trim()
-        val genres = getContent(infoElems, "Genres:")?.select("a")?.map { it.text() } ?: emptyList()
+        val tipe = getContent(infoElems, "Tipe:")?.text()?.substringAfter("Tipe:")?.trim()
         val eps = parseEpisodesFromPage(doc, url)
-        val isSeries = eps.isNotEmpty() || url.contains("/series/")
+        val isSeries = eps.isNotEmpty() || url.contains("/series/") || tipe?.contains("Drama", true) == true
 
         val recommendations = doc.select("div.list-drama .style_post_1 article, div.idmuvi-rp ul li")
             .mapNotNull { it.toRecommendResult() }
 
-        newLoadResponse(isSeries, judul.ifBlank { title }, url, TvType.AsianDrama, eps, poster, synopsis, year, genres, score, recommendations, doc)
-    }
-
-    private fun newLoadResponse(
-        isSeries: Boolean,
-        title: String,
-        url: String,
-        type: TvType,
-        episodes: List<Episode>,
-        poster: String?,
-        plot: String?,
-        year: Int?,
-        genres: List<String>,
-        score: String?,
-        recommendations: List<SearchResponse>,
-        doc: Document
-    ): LoadResponse {
-        val res = if (isSeries) {
-            newTvSeriesLoadResponse(title, url, type, episodes) { }
+        return@coroutineScope if (isSeries) {
+            newTvSeriesLoadResponse(judul.ifBlank { title }, url, TvType.AsianDrama, eps) {
+                posterUrl = poster
+                plot = synopsis
+                this.year = year
+                this.tags = genres
+                if (!score.isNullOrBlank()) addScore(score)
+                addActors(doc.select("span[itemprop=actors] a").map { it.text() })
+                this.recommendations = recommendations
+                addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
+            }
         } else {
-            newMovieLoadResponse(title, url, type, url) { }
+            newMovieLoadResponse(judul.ifBlank { title }, url, TvType.Movie, url) {
+                posterUrl = poster
+                plot = synopsis
+                this.year = year
+                this.tags = genres
+                if (!score.isNullOrBlank()) addScore(score)
+                addActors(doc.select("span[itemprop=actors] a").map { it.text() })
+                this.recommendations = recommendations
+                addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
+            }
         }
-
-        res.apply {
-            posterUrl = poster
-            this.plot = plot
-            this.year = year
-            this.tags = genres
-            if (!score.isNullOrBlank()) addScore(score)
-            addActors(doc.select("span[itemprop=actors] a").map { it.text() })
-            this.recommendations = recommendations
-            addTrailer(doc.selectFirst("a.gmr-trailer-popup")?.attr("href"))
-        }
-
-        return res
     }
 
     private fun parseEpisodesFromPage(doc: Document, pageUrl: String): List<Episode> {
@@ -136,7 +128,8 @@ class Dramaindo : MainAPI() {
         val res = app.get(data, interceptor = interceptor)
         val doc = res.document
 
-        doc.select("iframe").mapNotNull { it.attr("src")?.takeIf { it.isNotBlank() } }.forEach { found.add(it) }
+        doc.select("iframe").mapNotNull { it.attr("src")?.takeIf { it.isNotBlank() } }
+            .forEach { found.add(it) }
 
         doc.select(".streaming-box, .streaming_load").mapNotNull {
             try {
@@ -146,7 +139,7 @@ class Dramaindo : MainAPI() {
                     Regex("src\\s*=\\s*\"([^\"]+)\"").find(decoded)?.groupValues?.getOrNull(1)
                         ?: Regex("https?://[\\w./\\-?=&%]+").find(decoded)?.groupValues?.getOrNull(0)
                 } else null
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 null
             }
         }.forEach { found.add(it) }
@@ -159,7 +152,11 @@ class Dramaindo : MainAPI() {
         }.forEach { found.add(it) }
 
         found.map { url ->
-            async { runCatching { loadExtractor(url, data, subtitleCallback, callback) } }
+            async {
+                runCatching {
+                    loadExtractor(url, data, subtitleCallback, callback)
+                }
+            }
         }.awaitAll()
 
         found.isNotEmpty()
@@ -176,11 +173,13 @@ class Dramaindo : MainAPI() {
             newTvSeriesSearchResponse(title, href, TvType.AsianDrama) {
                 posterUrl = poster
                 if (!score.isNullOrBlank()) addScore(score)
+                posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 posterUrl = poster
                 if (!score.isNullOrBlank()) addScore(score)
+                posterHeaders = interceptor.getCookieHeaders(mainUrl).toMap()
             }
         }
     }
@@ -200,7 +199,10 @@ class Dramaindo : MainAPI() {
             ?.map { it.trim().split("\\s+".toRegex()) }
             ?.maxByOrNull { it.getOrNull(1)?.replace("w", "")?.toIntOrNull() ?: 0 }
             ?.firstOrNull()
-            ?: attr("data-src").ifBlank { attr("data-lazy-src") }.ifBlank { attr("src") }?.replace(Regex("-\\d+x\\d+"), "")
+            ?: attr("data-src")
+                .ifBlank { attr("data-lazy-src") }
+                .ifBlank { attr("src") }
+                ?.replace(Regex("-\\d+x\\d+"), "")
     }
 
     private fun getContent(elements: Elements, text: String): Element? {
@@ -208,6 +210,10 @@ class Dramaindo : MainAPI() {
     }
 
     private fun base64Decode(s: String): String {
-        return try { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)) } catch (_: Throwable) { "" }
+        return try {
+            String(android.util.Base64.decode(s, android.util.Base64.DEFAULT))
+        } catch (_: Throwable) {
+            ""
+        }
     }
 }
