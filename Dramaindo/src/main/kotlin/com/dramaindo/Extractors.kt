@@ -4,10 +4,25 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 
-open class Mitedrive : ExtractorApi() {
-    override val name = "Mitedrive"
+class MiteDrive : ExtractorApi() {
+    override val name = "MiteDrive"
     override val mainUrl = "https://mitedrive.com"
     override val requiresReferer = false
+
+    data class Data(@JsonProperty("original_url") val url: String? = null)
+    data class Responses(@JsonProperty("data") val data: Data? = null)
+
+    private fun extractId(url: String): String {
+        if (url.contains("id=")) {
+            val encoded = url.substringAfter("id=")
+            return base64Decode(encoded).substringAfterLast("/")
+        }
+        return url.substringAfterLast("/")
+    }
+
+    private fun base64Decode(str: String): String {
+        return String(android.util.Base64.decode(str, android.util.Base64.DEFAULT))
+    }
 
     override suspend fun getUrl(
         url: String,
@@ -15,39 +30,26 @@ open class Mitedrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val id = url.substringAfterLast("/")
-        val response = app.post(
+        val id = extractId(url)
+        val video = app.post(
             "https://api.mitedrive.com/api/view/$id",
-            referer = "$mainUrl/",
-            data = mapOf(
-                "csrf_token" to "ZXlKcGNDSTZJak0yTGpneExqWTFMakUyTWlJc0ltUmxkbWxqWlNJNklrMXZlbWxzYkdFdk5TNHdJQ2hYYVc1a2IzZHpJRTVVSURFd0xqQTdJRmRwYmpZME95QjROalE3SUhKMk9qRXdNUzR3S1NCSFpXTnJieTh5TURFd01ERXdNU0JHYVhKbFptOTRMekV3TVM0d0lpd2lZbkp2ZDNObGNpSTZJazF2ZW1sc2JHRWlMQ0pqYjI5cmFXVWlPaUlpTENKeVpXWmxjbkpsY2lJNklpSjk=",
-                "slug" to id
-            )
-        ).parsedSafe<MiteResponse>()?.data?.url ?: return
+            referer = "$mainUrl/"
+        ).parsedSafe<Responses>()?.data?.url ?: return
 
         callback.invoke(
-            ExtractorLink(
+            newExtractorLink(
                 name,
                 name,
-                response,
-                "$mainUrl/",
-                Qualities.P720.value,
-                INFER_TYPE
+                video,
+                referer = mainUrl,
+                quality = getQualityFromName(video)
             )
         )
     }
-
-    data class MiteData(
-        @JsonProperty("original_url") val url: String?
-    )
-
-    data class MiteResponse(
-        @JsonProperty("data") val data: MiteData?
-    )
 }
 
-open class Berkasdrive : ExtractorApi() {
-    override val name = "Berkasdrive"
+class BerkasDrive : ExtractorApi() {
+    override val name = "BerkasDrive"
     override val mainUrl = "https://dl.berkasdrive.com"
     override val requiresReferer = true
 
@@ -57,20 +59,17 @@ open class Berkasdrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val video = app.get(url, referer = referer)
-            .document
-            .selectFirst("video#player source")
-            ?.attr("src")
-            ?: return
+        val doc = app.get(url, referer = referer).document
+        val video = doc.select("video#player source").attr("src")
+        if (video.isNullOrBlank()) return
 
         callback.invoke(
-            ExtractorLink(
+            newExtractorLink(
                 name,
                 name,
                 video,
-                "$mainUrl/",
-                Qualities.P720.value,
-                INFER_TYPE
+                mainUrl,
+                quality = getQualityFromName(video)
             )
         )
     }
