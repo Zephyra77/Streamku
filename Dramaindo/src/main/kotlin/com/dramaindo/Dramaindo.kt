@@ -105,47 +105,53 @@ class Dramaindo : MainAPI() {
     }
 
     override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
+        str: String, 
+        z: Boolean, 
+        subtitleCallback: (SubtitleFile) -> Unit, 
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
-        val found = mutableSetOf<String>()
-        val res = app.get(data, interceptor = interceptor)
-        val doc = res.document
+        val arrayList = mutableListOf<String>()
+        val response = app.get(str, interceptor = interceptor)
+        val doc = response.document
 
-        doc.select("div.streaming-box[data], [data-src]").mapNotNull {
-            it.attr("data").ifBlank { it.attr("data-src") }
-        }.forEach { encoded ->
-            val decoded = base64Decode(encoded)
-            Regex("https?://[^\"]+").findAll(decoded).map { it.value }
-                .filter { it.startsWith("http") }
-                .forEach { found.add(it) }
-        }
+        doc.select("div.st-resolusi ul.resolusi-list li").forEach { attr ->
+            val decodedData = base64Decode(attr.attr("data"))
+            val jsonObject = decodedData.toJsonObject()
+            
+            val subtitleUrl = jsonObject.optString("subtitle_url")
+            if (!subtitleUrl.isNullOrBlank()) {
+                subtitleCallback(SubtitleFile("Indonesian", fixUrl(subtitleUrl)))
+            }
 
-        doc.select(".resolusi-list li[data]").forEach { li ->
-            val decoded = base64Decode(li.attr("data"))
-            runCatching {
-                val json = JSONObject(decoded)
-                val links = json.optJSONArray("links")
-                if (links != null) {
-                    for (i in 0 until links.length()) {
-                        val url = links.getJSONObject(i).optString("url")
-                        if (url.startsWith("http")) found.add(url)
-                    }
+            val links = jsonObject.optJsonArray("links")
+            links?.forEach { linkElement ->
+                val videoUrl = linkElement?.optString("url")
+                if (!videoUrl.isNullOrBlank()) {
+                    arrayList.add(fixUrl(videoUrl))
                 }
             }
         }
 
         doc.select("iframe[src]").mapNotNull { it.attr("src") }
-            .filter { it.startsWith("http") }
-            .forEach { found.add(it) }
+            .forEach { arrayList.add(it) }
 
-        val filtered = found.filter { it.startsWith("http") && !it.contains("facebook") && !it.contains("instagram") }.distinct()
+        val validUrls = arrayList.filter { it.startsWith("http") }
+        validUrls.forEach { url ->
+            val isM3u8 = url.endsWith(".m3u8")
+            callback(
+                ExtractorLink(
+                    source = this@Dramaindo.name,
+                    name = "${this@Dramaindo.name} 720p",
+                    url = url,
+                    referer = this@Dramaindo.mainUrl,
+                    quality = getQualityFromName("720p"),
+                    headers = mapOf("Referer" to this@Dramaindo.mainUrl),
+                    type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                )
+            )
+        }
 
-        Extractors.loadAllLinks(filtered, data, subtitleCallback, callback)
-
-        filtered.isNotEmpty()
+        validUrls.isNotEmpty()
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
@@ -182,14 +188,10 @@ class Dramaindo : MainAPI() {
             ?.maxByOrNull { it.getOrNull(1)?.removeSuffix("w")?.toIntOrNull() ?: 0 }
             ?.firstOrNull()
             ?: attr("data-src").ifBlank { attr("data-lazy-src") }.ifBlank { attr("src") }
-                ?.replace(Regex("-\\d+x\\d+"), "")
+                ?.let { fixUrl(it) }
     }
 
-    private fun getContent(elements: Elements, text: String): Element? {
-        return elements.firstOrNull { it.selectFirst("strong")?.text()?.trim() == text }
-    }
-
-    private fun base64Decode(s: String): String {
-        return runCatching { String(android.util.Base64.decode(s, android.util.Base64.DEFAULT)) }.getOrElse { "" }
+    private fun getContent(infoElems: Elements, label: String): Element? {
+        return infoElems.find { it.text().contains(label, ignoreCase = true) }
     }
 }
