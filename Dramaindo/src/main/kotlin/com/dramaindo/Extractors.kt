@@ -21,14 +21,17 @@ class MiteDrive : ExtractorApi() {
             .find(script)?.groupValues?.get(1)
             ?: return null
 
-        @Suppress("DEPRECATION")
+        val extractorData = mapOf(
+            "headers" to mapOf("Referer" to url).toString(),
+            "quality" to Qualities.P720.value.toString()
+        )
+
         return listOf(
-            ExtractorLink(
+            newExtractorLink(
                 source = name,
                 name = "$name HD",
                 url = videoUrl,
-                referer = url,
-                quality = Qualities.P720.value
+                extractorData = extractorData.toString()
             )
         )
     }
@@ -55,14 +58,17 @@ class BerkasDrive : ExtractorApi() {
             .find(text)?.groupValues?.get(1)
             ?: return null
 
-        @Suppress("DEPRECATION")
+        val extractorData = mapOf(
+            "headers" to mapOf("Referer" to decoded).toString(),
+            "quality" to Qualities.P720.value.toString()
+        )
+
         return listOf(
-            ExtractorLink(
+            newExtractorLink(
                 source = name,
                 name = "$name HD",
                 url = finalUrl,
-                referer = decoded,
-                quality = Qualities.P720.value
+                extractorData = extractorData.toString()
             )
         )
     }
