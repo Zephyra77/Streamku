@@ -22,10 +22,9 @@ class MiteDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        var fixedUrl = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
+        val fixedUrl = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
         val doc = app.get(url, referer = referer).document
-        val script = doc.select("script:containsData(sources)").firstOrNull()?.data()
-            ?: doc.select("script:containsData(player)").firstOrNull()?.data()
+        val script = doc.select("script:containsData(sources), script:containsData(file)").firstOrNull()?.data()
             ?: return@coroutineScope
 
         Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
@@ -43,24 +42,6 @@ class MiteDrive : ExtractorApi() {
                         url = videoUrl,
                         referer = fixedUrl,
                         quality = quality,
-                        headers = mapOf("Referer" to fixedUrl),
-                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                    )
-                )
-            }
-
-        Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\"")
-            .findAll(script)
-            .forEach { match ->
-                val videoUrl = match.groupValues[1]
-                val isM3u8 = videoUrl.endsWith(".m3u8")
-                callback(
-                    ExtractorLink(
-                        source = name,
-                        name = name,
-                        url = videoUrl,
-                        referer = fixedUrl,
-                        quality = Qualities.P720.value,
                         headers = mapOf("Referer" to fixedUrl),
                         type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
                     )
@@ -86,18 +67,17 @@ class BerkasDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        var workingDomain = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
+        val workingDomain = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
         val doc = app.get(url, referer = referer).document
 
         doc.select("video source").forEach { src ->
             val videoUrl = src.attr("src").trim()
-            val label = src.attr("label").ifBlank {
-                src.attr("res").ifBlank {
-                    Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "720"
-                }
-            }
-
             if (videoUrl.isNotBlank()) {
+                val label = src.attr("label").ifBlank {
+                    src.attr("res").ifBlank {
+                        Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "720"
+                    }
+                }
                 val isM3u8 = videoUrl.endsWith(".m3u8")
                 callback(
                     ExtractorLink(

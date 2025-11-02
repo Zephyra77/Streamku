@@ -50,7 +50,7 @@ class Dramaindo : MainAPI() {
 
         val title = doc.selectFirst("h1.entry-title, h1.title, h1")?.text()?.trim().orEmpty()
         val poster = doc.selectFirst("div.thumbnail_single img, .thumbnail img, figure img, .wp-post-image")?.getImage()
-        val synopsis = doc.selectFirst("div#sinopsis.synopsis p, div.entry-content p, .desc p, .synopsis p")?.text()?.trim()
+        val synopsis = doc.selectFirst("div#sinopsis p, div.entry-content p, .desc p, .synopsis p")?.text()?.trim()
         val infoElems = doc.select("div#informasi.info ul li")
 
         val judul = getContent(infoElems, "Judul:")?.text()?.substringAfter("Judul:")?.trim() ?: title
@@ -60,12 +60,9 @@ class Dramaindo : MainAPI() {
 
         val eps = parseEpisodesFromPage(doc)
         val typeLower = tipe?.lowercase()
-
-        val forceMovie = typeLower?.contains("movie") == true
-                || typeLower?.contains("film") == true
-                || (eps.size == 1 && url.contains("?episode=1"))
-
+        val forceMovie = typeLower?.contains("movie") == true || typeLower?.contains("film") == true || (eps.size == 1 && url.contains("?episode=1"))
         val isSeries = !forceMovie && (eps.size > 1 || url.contains("/series/"))
+
         val recommendations = doc.select("div.list-drama .style_post_1 article, div.idmuvi-rp ul li")
             .mapNotNull { it.toRecommendResult() }
 
@@ -120,7 +117,7 @@ class Dramaindo : MainAPI() {
             .filter { it.startsWith("http") }
             .forEach { found.add(it) }
 
-        doc.select(".streaming-box, .streaming_load[data], [data-src]")
+        doc.select(".streaming-box[data], [data-src]")
             .mapNotNull { it.attr("data").ifBlank { it.attr("data-src") } }
             .forEach { encoded ->
                 val decoded = base64Decode(encoded)
@@ -133,16 +130,15 @@ class Dramaindo : MainAPI() {
         doc.select("a[href]").mapNotNull { it.attr("href") }
             .filter {
                 it.contains("berkas", true) ||
-                it.contains("drive", true) ||
-                it.contains("stream", true) ||
-                it.contains("file", true)
+                it.contains("mitedrive", true) ||
+                it.contains("drive", true)
             }
             .forEach { found.add(it) }
 
         val filtered = found.filter {
             it.startsWith("http") &&
-            !it.contains("facebook.com") &&
-            !it.contains("instagram.com")
+            !it.contains("facebook") &&
+            !it.contains("instagram")
         }.distinct()
 
         filtered.map { url ->
