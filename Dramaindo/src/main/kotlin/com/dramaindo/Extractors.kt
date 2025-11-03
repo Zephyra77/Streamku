@@ -6,9 +6,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
-import org.jsoup.nodes.Document
+import j$.util.Base64
+import j$.util.Base64.Encoder
 import org.jsoup.nodes.Element
-import java.util.Base64
 
 object Extractors {
     private val miteDrive = MiteDrive()
@@ -39,8 +39,10 @@ class MiteDrive : ExtractorApi() {
     override val requiresReferer = true
 
     private fun encodeBase64Twice(str: String): String {
-        val encoder = Base64.getEncoder()
-        return encoder.encodeToString(encoder.encodeToString(str.toByteArray()).toByteArray())
+        val encoder: Encoder = Base64.getEncoder()
+        var encoded = encoder.encodeToString(str.toByteArray(Charsets.UTF_8))
+        encoded = encoder.encodeToString(encoded.toByteArray(Charsets.UTF_8))
+        return encoded
     }
 
     override suspend fun getUrl(
@@ -49,7 +51,7 @@ class MiteDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        val ip = app.get("https://ipv4.icanhazip.com").text.trim()
+        val ip = Requests.get("https://ipv4.icanhazip.com").text.trim()
         val payload = JSONObject().apply {
             put("ip", ip)
             put("device", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
@@ -62,9 +64,8 @@ class MiteDrive : ExtractorApi() {
         val slug = url.substringAfterLast("/")
         val apiUrl = "$mainUrl/api/view/"
 
-        val response = app.post(apiUrl, params = mapOf("csrf_token" to csrfToken, "slug" to slug))
-        val data = response.parser.parseSafe(response.text, Responses::class.java)?.data
-        val videoUrl = data?.url
+        val response = Requests.post(apiUrl, params = mapOf("csrf_token" to csrfToken, "slug" to slug))
+        val videoUrl = response.parser?.parseSafe(response.text, Responses::class)?.data?.url
 
         if (!videoUrl.isNullOrEmpty()) {
             callback(
@@ -72,7 +73,6 @@ class MiteDrive : ExtractorApi() {
                     name = name,
                     url = videoUrl,
                     source = name,
-                    quality = 720,
                     headers = mapOf("Referer" to mainUrl)
                 )
             )
@@ -95,7 +95,7 @@ class BerkasDrive : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
         val embedUrl = getEmbedUrl(url)
-        val doc: Document = app.get(embedUrl, referer = referer).document
+        val doc = Requests.get(embedUrl, referer).document
 
         doc.select(".daftar_server li[data-url]").forEach { element: Element ->
             val serverUrl = element.attr("data-url")
@@ -111,10 +111,17 @@ class BerkasDrive : ExtractorApi() {
                     name = name,
                     url = serverUrl,
                     source = sourceName,
-                    quality = 720,
                     headers = mapOf("Referer" to mainUrl)
                 )
             )
         }
     }
 }
+
+data class Responses(
+    val data: Data?
+)
+
+data class Data(
+    val url: String?
+)
