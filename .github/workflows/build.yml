@@ -42,7 +42,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew clean
+          ./gradlew clean --refresh-dependencies
 
       - name: Build Plugins
         run: |
