@@ -10,6 +10,7 @@ import java.util.Base64
 
 object Extractors {
     private val miteDrive = MiteDrive()
+    private val miteDrive2 = MiteDrive2()
     private val berkasDrive = BerkasDrive()
 
     suspend fun loadAllLinks(
@@ -22,6 +23,7 @@ object Extractors {
             async {
                 runCatching {
                     when {
+                        "mitedrive.my.id" in url -> miteDrive2.getUrl(url, referer, subtitleCallback, callback)
                         "mitedrive" in url -> miteDrive.getUrl(url, referer, subtitleCallback, callback)
                         "berkasdrive" in url -> berkasDrive.getUrl(url, referer, subtitleCallback, callback)
                     }
@@ -73,6 +75,11 @@ class MiteDrive : ExtractorApi() {
             )
         }
     }
+}
+
+class MiteDrive2 : MiteDrive() {
+    override val name = "MiteDrive2"
+    override val mainUrl = "https://mitedrive.my.id"
 }
 
 class BerkasDrive : ExtractorApi() {
