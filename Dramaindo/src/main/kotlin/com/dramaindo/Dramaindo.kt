@@ -91,7 +91,7 @@ class Dramaindo : MainAPI() {
         }
     }
 
-    private fun parseEpisodesFromPage(doc: Document): List<Episode> {
+private fun parseEpisodesFromPage(doc: Document): List<Episode> {
         return doc.select("ul.episode-list li a, .daftar-episode li a, div.list-episode-streaming ul.episode-list li a")
             .mapNotNull { a ->
                 val name = a.text().trim().ifBlank { return@mapNotNull null }
@@ -116,14 +116,14 @@ class Dramaindo : MainAPI() {
 
         doc.select("div.st-resolusi ul.resolusi-list li").forEach { attr ->
             val decodedData = base64Decode(attr.attr("data"))
-            val jsonObject = decodedData.toJsonObject()
-            
-            val subtitleUrl = jsonObject.optString("subtitle_url")
+            val jsonObject = JSONObject(decodedData)
+
+            val subtitleUrl = jsonObject.optString("subtitle_url", "")
             if (!subtitleUrl.isNullOrBlank()) {
                 subtitleCallback(SubtitleFile("Indonesian", fixUrl(subtitleUrl)))
             }
 
-            val links = jsonObject.optJsonArray("links")
+            val links = jsonObject.optJSONArray("links")
             links?.forEach { linkElement ->
                 val videoUrl = linkElement?.optString("url")
                 if (!videoUrl.isNullOrBlank()) {
@@ -188,10 +188,5 @@ class Dramaindo : MainAPI() {
             ?.maxByOrNull { it.getOrNull(1)?.removeSuffix("w")?.toIntOrNull() ?: 0 }
             ?.firstOrNull()
             ?: attr("data-src").ifBlank { attr("data-lazy-src") }.ifBlank { attr("src") }
-                ?.let { fixUrl(it) }
-    }
-
-    private fun getContent(infoElems: Elements, label: String): Element? {
-        return infoElems.find { it.text().contains(label, ignoreCase = true) }
     }
 }
