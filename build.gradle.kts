@@ -3,18 +3,25 @@ import com.lagradost.cloudstream3.gradle.CloudstreamExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+val jitpackUsername: String = System.getenv("JITPACK_USERNAME") ?: ""
+val jitpackToken: String = System.getenv("JITPACK_TOKEN") ?: ""
+
 buildscript {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io")
+        maven("https://jitpack.io") {
+            credentials {
+                username = jitpackUsername
+                password = jitpackToken
+            }
+        }
     }
 
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.10")
-        // Ganti master-SNAPSHOT dengan versi release CloudStream3
-        classpath("com.github.Lagradost:CloudStream3:1.2.2") 
+        classpath("com.github.Lagradost:CloudStream3:master-SNAPSHOT")
     }
 }
 
@@ -22,7 +29,12 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io")
+        maven("https://jitpack.io") {
+            credentials {
+                username = jitpackUsername
+                password = jitpackToken
+            }
+        }
     }
 }
 
@@ -72,7 +84,7 @@ subprojects {
         val cloudstream by configurations
         val implementation by configurations
 
-        cloudstream("com.github.Lagradost:CloudStream3:1.2.2") // versi release
+        cloudstream("com.github.Lagradost:CloudStream3:master-SNAPSHOT")
 
         implementation(kotlin("stdlib"))
         implementation("com.github.Blatzar:NiceHttp:0.4.12")
