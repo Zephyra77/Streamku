@@ -9,6 +9,7 @@ class DramaindoPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(Dramaindo())
         registerExtractorAPI(MiteDrive())
+        registerExtractorAPI(MiteDrive2())
         registerExtractorAPI(BerkasDrive())
     }
 }
