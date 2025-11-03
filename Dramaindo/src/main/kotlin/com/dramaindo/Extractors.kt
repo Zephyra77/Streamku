@@ -6,9 +6,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
-import j$.util.Base64
-import j$.util.Base64.Encoder
-import org.jsoup.nodes.Element
+import java.util.Base64
 
 object Extractors {
     private val miteDrive = MiteDrive()
@@ -39,7 +37,7 @@ class MiteDrive : ExtractorApi() {
     override val requiresReferer = true
 
     private fun encodeBase64Twice(str: String): String {
-        val encoder: Encoder = Base64.getEncoder()
+        val encoder = Base64.getEncoder()
         var encoded = encoder.encodeToString(str.toByteArray(Charsets.UTF_8))
         encoded = encoder.encodeToString(encoded.toByteArray(Charsets.UTF_8))
         return encoded
@@ -63,16 +61,19 @@ class MiteDrive : ExtractorApi() {
         val csrfToken = encodeBase64Twice(payload.toString())
         val slug = url.substringAfterLast("/")
         val apiUrl = "$mainUrl/api/view/"
+        val params = mapOf("csrf_token" to csrfToken, "slug" to slug)
 
-        val response = Requests.post(apiUrl, params = mapOf("csrf_token" to csrfToken, "slug" to slug))
-        val videoUrl = response.parser?.parseSafe(response.text, Responses::class)?.data?.url
+        val response = Requests.post(apiUrl, null, params)
+        val data = response.parser?.parseSafe(response.text, Responses::class.java)?.data
 
-        if (!videoUrl.isNullOrEmpty()) {
+        data?.url?.let { videoUrl ->
             callback(
                 newExtractorLink(
+                    source = name,
                     name = name,
                     url = videoUrl,
-                    source = name,
+                    referer = mainUrl,
+                    quality = getQualityFromName("720p"),
                     headers = mapOf("Referer" to mainUrl)
                 )
             )
@@ -97,7 +98,7 @@ class BerkasDrive : ExtractorApi() {
         val embedUrl = getEmbedUrl(url)
         val doc = Requests.get(embedUrl, referer).document
 
-        doc.select(".daftar_server li[data-url]").forEach { element: Element ->
+        doc.select(".daftar_server li[data-url]").forEach { element ->
             val serverUrl = element.attr("data-url")
             val sourceName = when {
                 serverUrl.contains("miterequest") -> "MiteReq"
@@ -108,20 +109,12 @@ class BerkasDrive : ExtractorApi() {
 
             callback(
                 newExtractorLink(
+                    source = sourceName,
                     name = name,
                     url = serverUrl,
-                    source = sourceName,
-                    headers = mapOf("Referer" to mainUrl)
+                    referer = mainUrl
                 )
             )
         }
     }
 }
-
-data class Responses(
-    val data: Data?
-)
-
-data class Data(
-    val url: String?
-)
