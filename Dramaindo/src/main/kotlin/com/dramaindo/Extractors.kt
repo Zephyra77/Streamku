@@ -68,62 +68,33 @@ class MiteDrive : ExtractorApi() {
         if (videoUrl.isNotEmpty()) {
             callback(
                 newExtractorLink(
-                    url = videoUrl,
+                    source = name,
                     name = "720p",
-                    source = name
+                    url = videoUrl,
+                    referer = mainUrl,
+                    quality = getQualityFromName("720p")
                 )
             )
+        }
+    }
+
+    private fun getQualityFromName(name: String): Int {
+        return when (name) {
+            "1080p" -> Qualities.P1080.value
+            "720p" -> Qualities.P720.value
+            else -> Qualities.P480.value
         }
     }
 }
 
-class MiteDrive2 : ExtractorApi() {
+class MiteDrive2 : MiteDrive() {
     override val name = "MiteDrive2"
     override val mainUrl = "https://mitedrive.my.id"
-    override val requiresReferer = true
-
-    private fun encodeBase64Twice(str: String): String {
-        val encoder = Base64.getEncoder()
-        var encoded = encoder.encodeToString(str.toByteArray(Charsets.UTF_8))
-        encoded = encoder.encodeToString(encoded.toByteArray(Charsets.UTF_8))
-        return encoded
-    }
-
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) = coroutineScope {
-        val ip = app.get("https://ipv4.icanhazip.com").text.trim()
-        val payload = JSONObject().apply {
-            put("ip", ip)
-            put("device", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-            put("browser", "Mozilla")
-            put("cookie", "")
-            put("referrer", referer ?: "")
-        }
-        val csrfToken = encodeBase64Twice(payload.toString())
-        val slug = url.substringAfterLast("/")
-        val apiUrl = "$mainUrl/api/view/"
-        val params = mapOf("csrf_token" to csrfToken, "slug" to slug)
-        val response = app.post(apiUrl, data = params)
-        val videoUrl = JSONObject(response.text).optString("url")
-        if (videoUrl.isNotEmpty()) {
-            callback(
-                newExtractorLink(
-                    url = videoUrl,
-                    name = "720p",
-                    source = name
-                )
-            )
-        }
-    }
 }
 
 class BerkasDrive : ExtractorApi() {
     override val name = "BerkasDrive"
-    override val mainUrl = "https://dl.berkasdrive.com"
+    override val mainUrl = "https://berkasdrive.com"
     override val requiresReferer = true
 
     private fun getEmbedUrl(url: String): String =
@@ -147,11 +118,21 @@ class BerkasDrive : ExtractorApi() {
             }
             callback(
                 newExtractorLink(
+                    source = sourceName,
+                    name = "720p",
                     url = serverUrl,
-                    name = sourceName,
-                    source = name
+                    referer = mainUrl,
+                    quality = getQualityFromName("720p")
                 )
             )
+        }
+    }
+
+    private fun getQualityFromName(name: String): Int {
+        return when (name) {
+            "1080p" -> Qualities.P1080.value
+            "720p" -> Qualities.P720.value
+            else -> Qualities.P480.value
         }
     }
 }
