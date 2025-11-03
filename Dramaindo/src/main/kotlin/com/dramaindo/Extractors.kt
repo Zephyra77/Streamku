@@ -6,7 +6,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
-import org.jsoup.nodes.Document
 import java.util.Base64
 
 object Extractors {
@@ -50,7 +49,7 @@ class MiteDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        val ip = Requests.get("https://ipv4.icanhazip.com").text.trim()
+        val ip = app.get("https://ipv4.icanhazip.com").text.trim()
         val payload = JSONObject().apply {
             put("ip", ip)
             put("device", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
@@ -58,20 +57,18 @@ class MiteDrive : ExtractorApi() {
             put("cookie", "")
             put("referrer", referer ?: "")
         }
-
         val csrfToken = encodeBase64Twice(payload.toString())
         val slug = url.substringAfterLast("/")
         val apiUrl = "$mainUrl/api/view/"
         val params = mapOf("csrf_token" to csrfToken, "slug" to slug)
-
-        val response = Requests.post(apiUrl, null, params)
+        val response = app.post(apiUrl, data = params)
         val videoUrl = JSONObject(response.text).optString("url")
         if (videoUrl.isNotEmpty()) {
             callback(
                 newExtractorLink(
                     url = videoUrl,
-                    quality = 720,
-                    headers = mapOf("Referer" to mainUrl)
+                    name = "720p",
+                    source = name
                 )
             )
         }
@@ -93,8 +90,7 @@ class BerkasDrive : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
         val embedUrl = getEmbedUrl(url)
-        val doc: Document = Requests.get(embedUrl, referer).document
-
+        val doc = app.get(embedUrl, referer = referer).document
         doc.select(".daftar_server li[data-url]").forEach { element ->
             val serverUrl = element.attr("data-url")
             val sourceName = when {
@@ -103,12 +99,11 @@ class BerkasDrive : ExtractorApi() {
                 serverUrl.contains("cdn-bunny.berkasdrive") -> "BunnyDrive"
                 else -> name
             }
-
             callback(
                 newExtractorLink(
                     url = serverUrl,
                     name = sourceName,
-                    referer = mainUrl
+                    source = name
                 )
             )
         }
