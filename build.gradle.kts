@@ -1,21 +1,13 @@
 import com.android.build.gradle.BaseExtension
 import com.lagradost.cloudstream3.gradle.CloudstreamExtension
-import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
-val jitpackUsername: String = System.getenv("JITPACK_USERNAME") ?: ""
-val jitpackToken: String = System.getenv("JITPACK_TOKEN") ?: ""
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 buildscript {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io") {
-            credentials {
-                username = jitpackUsername
-                password = jitpackToken
-            }
-        }
+        maven("https://jitpack.io")
     }
 
     dependencies {
@@ -29,12 +21,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven("https://jitpack.io") {
-            credentials {
-                username = jitpackUsername
-                password = jitpackToken
-            }
-        }
+        maven("https://jitpack.io")
     }
 }
 
@@ -59,7 +46,7 @@ subprojects {
 
         defaultConfig {
             minSdk = 21
-            compileSdkVersion = 35
+            compileSdkVersion(35)
             targetSdk = 35
         }
 
