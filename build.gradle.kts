@@ -9,10 +9,11 @@ buildscript {
         mavenCentral()
         maven("https://jitpack.io")
     }
+
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.10")
-        classpath("com.lagradost.cloudstream3.gradle:pre-release")
+        classpath("com.github.Lagradost:CloudStream3:master-SNAPSHOT")
     }
 }
 
@@ -70,11 +71,24 @@ subprojects {
         val cloudstream by configurations
         val implementation by configurations
 
-        cloudstream("com.lagradost:cloudstream3:pre-release")
+        cloudstream("com.github.Lagradost:CloudStream3:master-SNAPSHOT")
+
         implementation(kotlin("stdlib"))
-        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+        implementation("com.github.Blatzar:NiceHttp:0.4.12")
         implementation("org.jsoup:jsoup:1.19.1")
+        implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.16.0")
+        implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+        implementation("com.faendir.rhino:rhino-android:1.6.0")
+        implementation("me.xdrop:fuzzywuzzy:1.4.0")
         implementation("com.google.code.gson:gson:2.11.0")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+        implementation("app.cash.quickjs:quickjs-android:0.9.2")
+        implementation("com.squareup.okhttp3:okhttp:4.12.0")
+        implementation("androidx.core:core-ktx:1.16.0")
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
+        implementation("com.github.vidstige:jadb:v1.2.1")
+        implementation("org.bouncycastle:bcpkix-jdk15on:1.70")
     }
 }
 
