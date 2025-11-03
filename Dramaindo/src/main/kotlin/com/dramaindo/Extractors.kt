@@ -2,10 +2,13 @@ package com.dramaindo
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.network.Requests
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import java.util.Base64
 
 object Extractors {
@@ -32,9 +35,9 @@ object Extractors {
 }
 
 class MiteDrive : ExtractorApi() {
-    override val name = "MiteDrive"
-    override val mainUrl = "https://mitedrive.com"
-    override val requiresReferer = true
+    override val name: String = "MiteDrive"
+    override val mainUrl: String = "https://mitedrive.com"
+    override val requiresReferer: Boolean = true
 
     private fun encodeBase64Twice(str: String): String {
         val encoder = Base64.getEncoder()
@@ -50,6 +53,7 @@ class MiteDrive : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
         val ip = Requests.get(app, "https://ipv4.icanhazip.com").text.trim()
+
         val payload = JSONObject().apply {
             put("ip", ip)
             put("device", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
@@ -64,7 +68,7 @@ class MiteDrive : ExtractorApi() {
         val params = mapOf("csrf_token" to csrfToken, "slug" to slug)
 
         val response = Requests.post(app, apiUrl, null, params)
-        val data = response.parser.parseSafe(response.text, Responses::class.java)?.data
+        val data = response.parser?.parseSafe(response.text, Responses::class.java)?.data
 
         data?.url?.let { videoUrl ->
             callback(
@@ -82,9 +86,9 @@ class MiteDrive : ExtractorApi() {
 }
 
 class BerkasDrive : ExtractorApi() {
-    override val name = "BerkasDrive"
-    override val mainUrl = "https://dl.berkasdrive.com"
-    override val requiresReferer = true
+    override val name: String = "BerkasDrive"
+    override val mainUrl: String = "https://dl.berkasdrive.com"
+    override val requiresReferer: Boolean = true
 
     private fun getEmbedUrl(url: String): String =
         if (url.contains("/streaming/")) url else "$mainUrl/streaming/?id=${url.substringAfter("?id=")}"
@@ -96,9 +100,9 @@ class BerkasDrive : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
         val embedUrl = getEmbedUrl(url)
-        val doc = Requests.get(app, embedUrl, referer).document
+        val doc: Document = Requests.get(app, embedUrl, referer).document
 
-        doc.select(".daftar_server li[data-url]").forEach { element ->
+        doc.select(".daftar_server li[data-url]").forEach { element: Element ->
             val serverUrl = element.attr("data-url")
             val sourceName = when {
                 serverUrl.contains("miterequest") -> "MiteReq"
@@ -116,13 +120,5 @@ class BerkasDrive : ExtractorApi() {
                 )
             )
         }
-    }
-}
-
-private fun getQualityFromName(name: String): Int {
-    return when (name.lowercase()) {
-        "720p" -> 720
-        "1080p" -> 1080
-        else -> 480
     }
 }
