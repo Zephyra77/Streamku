@@ -1,7 +1,7 @@
 import com.android.build.gradle.BaseExtension
 import com.lagradost.cloudstream3.gradle.CloudstreamExtension
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 buildscript {
     repositories {
@@ -13,7 +13,8 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.10")
-        classpath("com.github.Lagradost:CloudStream3:master-SNAPSHOT")
+        // Ganti master-SNAPSHOT dengan versi release CloudStream3
+        classpath("com.github.Lagradost:CloudStream3:1.2.2") 
     }
 }
 
@@ -46,7 +47,7 @@ subprojects {
 
         defaultConfig {
             minSdk = 21
-            compileSdkVersion(35)
+            compileSdkVersion = 35
             targetSdk = 35
         }
 
@@ -71,7 +72,7 @@ subprojects {
         val cloudstream by configurations
         val implementation by configurations
 
-        cloudstream("com.github.Lagradost:CloudStream3:master-SNAPSHOT")
+        cloudstream("com.github.Lagradost:CloudStream3:1.2.2") // versi release
 
         implementation(kotlin("stdlib"))
         implementation("com.github.Blatzar:NiceHttp:0.4.12")
