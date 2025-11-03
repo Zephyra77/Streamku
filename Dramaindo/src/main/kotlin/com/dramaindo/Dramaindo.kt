@@ -91,7 +91,7 @@ class Dramaindo : MainAPI() {
         }
     }
 
-private fun parseEpisodesFromPage(doc: Document): List<Episode> {
+    private fun parseEpisodesFromPage(doc: Document): List<Episode> {
         return doc.select("ul.episode-list li a, .daftar-episode li a, div.list-episode-streaming ul.episode-list li a")
             .mapNotNull { a ->
                 val name = a.text().trim().ifBlank { return@mapNotNull null }
@@ -117,16 +117,16 @@ private fun parseEpisodesFromPage(doc: Document): List<Episode> {
         doc.select("div.st-resolusi ul.resolusi-list li").forEach { attr ->
             val decodedData = base64Decode(attr.attr("data"))
             val jsonObject = JSONObject(decodedData)
-
+            
             val subtitleUrl = jsonObject.optString("subtitle_url", "")
-            if (!subtitleUrl.isNullOrBlank()) {
+            if (subtitleUrl.isNotBlank()) {
                 subtitleCallback(SubtitleFile("Indonesian", fixUrl(subtitleUrl)))
             }
 
             val links = jsonObject.optJSONArray("links")
             links?.forEach { linkElement ->
-                val videoUrl = linkElement?.optString("url")
-                if (!videoUrl.isNullOrBlank()) {
+                val videoUrl = (linkElement as? JSONObject)?.optString("url")
+                if (videoUrl?.isNotBlank() == true) {
                     arrayList.add(fixUrl(videoUrl))
                 }
             }
@@ -182,11 +182,30 @@ private fun parseEpisodesFromPage(doc: Document): List<Episode> {
         return newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
     }
 
-    private fun Element.getImage(): String? {
-        return attr("srcset").takeIf { it.isNotBlank() }?.split(",")
-            ?.map { it.trim().split(" ") }
-            ?.maxByOrNull { it.getOrNull(1)?.removeSuffix("w")?.toIntOrNull() ?: 0 }
-            ?.firstOrNull()
-            ?: attr("data-src").ifBlank { attr("data-lazy-src") }.ifBlank { attr("src") }
+private fun Element.getImage(): String? {
+    return attr("srcset").takeIf { it.isNotBlank() }?.split(",")
+        ?.map { it.trim().split(" ") }
+        ?.maxByOrNull { it.getOrNull(1)?.removeSuffix("w")?.toIntOrNull() ?: 0 }
+        ?.firstOrNull()
+        ?: attr("data-src").ifBlank { attr("src") }
+}
+
+private fun getContent(infoElems: Elements, label: String): Element? {
+    return infoElems.find { it.text().contains(label, true) }?.select("span")
+}
+
+private fun fixUrl(url: String): String {
+    return if (url.startsWith("http")) url else "$mainUrl$url"
+}
+
+private fun base64Decode(encoded: String): String {
+    return String(java.util.Base64.getDecoder().decode(encoded))
+}
+
+private fun getQualityFromName(name: String): Int {
+    return when (name) {
+        "720p" -> 720
+        "1080p" -> 1080
+        else -> 480
     }
 }
