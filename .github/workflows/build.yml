@@ -47,13 +47,13 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew clean --refresh-dependencies --stacktrace --info --warning-mode all
+          ./gradlew clean --stacktrace --info
 
       - name: Build Plugins
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew make makePluginsJson --stacktrace --info --warning-mode all
+          ./gradlew make makePluginsJson --stacktrace --info
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds || true
           cp build/plugins.json $GITHUB_WORKSPACE/builds || true
 
