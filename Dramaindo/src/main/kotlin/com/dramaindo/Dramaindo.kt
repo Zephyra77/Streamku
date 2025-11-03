@@ -170,12 +170,4 @@ class Dramaindo : MainAPI() {
     private fun base64Decode(encoded: String): String {
         return String(java.util.Base64.getDecoder().decode(encoded))
     }
-
-    private fun getQualityFromName(name: String): Int {
-        return when (name) {
-            "720p" -> 720
-            "1080p" -> 1080
-            else -> 480
-        }
-    }
 }
