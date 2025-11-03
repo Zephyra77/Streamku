@@ -182,30 +182,31 @@ class Dramaindo : MainAPI() {
         return newTvSeriesSearchResponse(title, href, TvType.AsianDrama) { posterUrl = poster }
     }
 
-private fun Element.getImage(): String? {
-    return attr("srcset").takeIf { it.isNotBlank() }?.split(",")
-        ?.map { it.trim().split(" ") }
-        ?.maxByOrNull { it.getOrNull(1)?.removeSuffix("w")?.toIntOrNull() ?: 0 }
-        ?.firstOrNull()
-        ?: attr("data-src").ifBlank { attr("src") }
-}
+    private fun Element.getImage(): String? {
+        return attr("srcset").takeIf { it.isNotBlank() }?.split(",")
+            ?.map { it.trim().split(" ") }
+            ?.maxByOrNull { it.getOrNull(1)?.removeSuffix("w")?.toIntOrNull() ?: 0 }
+            ?.firstOrNull()
+            ?: attr("data-src").ifBlank { attr("src") }
+    }
 
-private fun getContent(infoElems: Elements, label: String): Element? {
-    return infoElems.find { it.text().contains(label, true) }?.select("span")
-}
+    private fun getContent(infoElems: Elements, label: String): Element? {
+        return infoElems.find { it.text().contains(label, true) }?.select("span")
+    }
 
-private fun fixUrl(url: String): String {
-    return if (url.startsWith("http")) url else "$mainUrl$url"
-}
+    private fun fixUrl(url: String): String {
+        return if (url.startsWith("http")) url else "$mainUrl$url"
+    }
 
-private fun base64Decode(encoded: String): String {
-    return String(java.util.Base64.getDecoder().decode(encoded))
-}
+    private fun base64Decode(encoded: String): String {
+        return String(java.util.Base64.getDecoder().decode(encoded))
+    }
 
-private fun getQualityFromName(name: String): Int {
-    return when (name) {
-        "720p" -> 720
-        "1080p" -> 1080
-        else -> 480
+    private fun getQualityFromName(name: String): Int {
+        return when (name) {
+            "720p" -> 720
+            "1080p" -> 1080
+            else -> 480
+        }
     }
 }
