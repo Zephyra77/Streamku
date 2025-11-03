@@ -5,7 +5,8 @@ import com.lagradost.cloudstream3.utils.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import org.json.JSONObject
+import java.util.Base64
 
 object Extractors {
     private val miteDrive = MiteDrive()
@@ -32,14 +33,15 @@ object Extractors {
 
 class MiteDrive : ExtractorApi() {
     override val name = "MiteDrive"
-    override val mainUrl = "https://mitedrive.my.id"
+    override val mainUrl = "https://mitedrive.com"
     override val requiresReferer = true
 
-    private val altDomains = listOf(
-        "https://mitedrive.my.id",
-        "https://mitedrive.lol",
-        "https://mitedrive.cloud"
-    )
+    private fun encodeBase64Twice(str: String): String {
+        val encoder = Base64.getEncoder()
+        var encoded = encoder.encodeToString(str.toByteArray(Charsets.UTF_8))
+        encoded = encoder.encodeToString(encoded.toByteArray(Charsets.UTF_8))
+        return encoded
+    }
 
     override suspend fun getUrl(
         url: String,
@@ -47,42 +49,45 @@ class MiteDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        val fixedUrl = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
-        val doc = app.get(url, referer = referer).document
+        val ip = Requests.get(app, "https://ipv4.icanhazip.com").text.trim()
+        val payload = JSONObject().apply {
+            put("ip", ip)
+            put("device", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            put("browser", "Mozilla")
+            put("cookie", "")
+            put("referrer", referer ?: "")
+        }
 
-        doc.select("script:containsData(sources), script:containsData(file)").forEach { script ->
-            Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
-                .findAll(script.data())
-                .forEach { match ->
-                    val videoUrl = match.groupValues[1]
-                    val qualityStr = match.groupValues[2]
-                    val isM3u8 = videoUrl.endsWith(".m3u8")
-                    callback(
-                        ExtractorLink(
-                            source = name,
-                            name = "$name ${qualityStr}p",
-                            url = videoUrl,
-                            referer = fixedUrl,
-                            quality = getQualityFromName("${qualityStr}p"),
-                            headers = mapOf("Referer" to fixedUrl),
-                            type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                        )
-                    )
-                }
+        val csrfToken = encodeBase64Twice(payload.toString())
+        val slug = url.substringAfterLast("/")
+        val apiUrl = "$mainUrl/api/view/"
+        val params = mapOf("csrf_token" to csrfToken, "slug" to slug)
+
+        val response = Requests.post(app, apiUrl, null, params)
+        val data = response.parser.parseSafe(response.text, Responses::class.java)?.data
+
+        data?.url?.let { videoUrl ->
+            callback(
+                ExtractorLink(
+                    source = name,
+                    name = name,
+                    url = videoUrl,
+                    referer = mainUrl,
+                    quality = getQualityFromName("720p"),
+                    headers = mapOf("Referer" to mainUrl)
+                )
+            )
         }
     }
 }
 
 class BerkasDrive : ExtractorApi() {
     override val name = "BerkasDrive"
-    override val mainUrl = "https://berkasdrive.com"
+    override val mainUrl = "https://dl.berkasdrive.com"
     override val requiresReferer = true
 
-    private val altDomains = listOf(
-        "https://berkasdrive.com",
-        "https://dl.berkasdrive.com",
-        "https://berkasdrive.net"
-    )
+    private fun getEmbedUrl(url: String): String =
+        if (url.contains("/streaming/")) url else "$mainUrl/streaming/?id=${url.substringAfter("?id=")}"
 
     override suspend fun getUrl(
         url: String,
@@ -90,69 +95,34 @@ class BerkasDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        val workingDomain = altDomains.find { url.contains(it.removePrefix("https://")) } ?: altDomains.first()
-        val doc = app.get(url, referer = referer).document
+        val embedUrl = getEmbedUrl(url)
+        val doc = Requests.get(app, embedUrl, referer).document
 
-        doc.select("video source").forEach { src ->
-            val videoUrl = src.attr("src").trim()
-            if (videoUrl.isNotBlank()) {
-                val label = src.attr("label").ifBlank {
-                    src.attr("res").ifBlank {
-                        Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "360"
-                    }
-                }
-                val isM3u8 = videoUrl.endsWith(".m3u8")
-                callback(
-                    ExtractorLink(
-                        source = name,
-                        name = "$name ${label}p",
-                        url = videoUrl,
-                        referer = workingDomain,
-                        quality = getQualityFromName("${label}p"),
-                        headers = mapOf("Referer" to workingDomain),
-                        type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                    )
-                )
+        doc.select(".daftar_server li[data-url]").forEach { element ->
+            val serverUrl = element.attr("data-url")
+            val sourceName = when {
+                serverUrl.contains("miterequest") -> "MiteReq"
+                serverUrl.contains("cdn-cf.berkasdrive") -> "BerkasCF"
+                serverUrl.contains("cdn-bunny.berkasdrive") -> "BunnyDrive"
+                else -> name
             }
-        }
 
-        doc.select("script:containsData(sources), script:containsData(file)").forEach { script ->
-            Regex("\"file\"\\s*:\\s*\"(https[^\"]+)\",\\s*\"label\"\\s*:\\s*\"(\\d+)p\"")
-                .findAll(script.data())
-                .forEach { match ->
-                    val videoUrl = match.groupValues[1]
-                    val qualityStr = match.groupValues[2]
-                    val isM3u8 = videoUrl.endsWith(".m3u8")
-                    callback(
-                        ExtractorLink(
-                            source = name,
-                            name = "$name ${qualityStr}p",
-                            url = videoUrl,
-                            referer = workingDomain,
-                            quality = getQualityFromName("${qualityStr}p"),
-                            headers = mapOf("Referer" to workingDomain),
-                            type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                        )
-                    )
-                }
-        }
-
-        doc.select("[data-video], [data-src]").mapNotNull {
-            it.attr("data-video").ifBlank { it.attr("data-src") }
-        }.forEach { videoUrl ->
-            val label = Regex("(\\d{3,4})p").find(videoUrl)?.groupValues?.getOrNull(1) ?: "360"
-            val isM3u8 = videoUrl.endsWith(".m3u8")
             callback(
                 ExtractorLink(
-                    source = name,
-                    name = "$name ${label}p",
-                    url = videoUrl,
-                    referer = workingDomain,
-                    quality = getQualityFromName("${label}p"),
-                    headers = mapOf("Referer" to workingDomain),
-                    type = if (isM3u8) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    source = sourceName,
+                    name = name,
+                    url = serverUrl,
+                    referer = mainUrl
                 )
             )
         }
+    }
+}
+
+private fun getQualityFromName(name: String): Int {
+    return when (name.lowercase()) {
+        "720p" -> 720
+        "1080p" -> 1080
+        else -> 480
     }
 }
