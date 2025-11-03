@@ -49,9 +49,7 @@ class MiteDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        val app = app
-        val ip = khttp.get("https://ipv4.icanhazip.com").text.trim()
-
+        val ip = app.get("https://ipv4.icanhazip.com").text.trim()
         val payload = JSONObject().apply {
             put("ip", ip)
             put("device", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
@@ -63,13 +61,12 @@ class MiteDrive : ExtractorApi() {
         val csrfToken = encodeBase64Twice(payload.toString())
         val slug = url.substringAfterLast("/")
         val apiUrl = "$mainUrl/api/view/"
-        val params = mapOf("csrf_token" to csrfToken, "slug" to slug)
 
-        val response = khttp.post(apiUrl, data = params)
-        val json = JSONObject(response.text)
-        val videoUrl = json.optJSONObject("data")?.optString("url")
+        val response = app.post(apiUrl, params = mapOf("csrf_token" to csrfToken, "slug" to slug))
+        val data = response.parser.parseSafe(response.text, Responses::class.java)?.data
+        val videoUrl = data?.url
 
-        if (!videoUrl.isNullOrBlank()) {
+        if (!videoUrl.isNullOrEmpty()) {
             callback(
                 newExtractorLink(
                     name = name,
@@ -97,7 +94,6 @@ class BerkasDrive : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
-        val app = app
         val embedUrl = getEmbedUrl(url)
         val doc: Document = app.get(embedUrl, referer = referer).document
 
