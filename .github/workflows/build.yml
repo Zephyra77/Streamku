@@ -38,17 +38,22 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Set JitPack credentials
+        run: |
+          echo "JITPACK_USERNAME=${{ secrets.JITPACK_USERNAME }}" >> $GITHUB_ENV
+          echo "JITPACK_TOKEN=${{ secrets.JITPACK_TOKEN }}" >> $GITHUB_ENV
+
       - name: Clean Gradle build cache
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew clean --refresh-dependencies
+          ./gradlew clean --refresh-dependencies --stacktrace --info --warning-mode all
 
       - name: Build Plugins
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew make makePluginsJson
+          ./gradlew make makePluginsJson --stacktrace --info --warning-mode all
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds || true
           cp build/plugins.json $GITHUB_WORKSPACE/builds || true
 
