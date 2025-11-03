@@ -17,40 +17,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4.2.2
+      - name: Checkout plugin source
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          path: "src"
+          path: src
 
       - name: Checkout builds branch
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4
         with:
-          ref: "builds"
+          ref: builds
           token: ${{ secrets.GITHUB_TOKEN }}
-          path: "builds"
+          path: builds
 
       - name: Clean old builds
         run: rm -f $GITHUB_WORKSPACE/builds/*.cs3 || true
 
       - name: Setup JDK 17
-        uses: actions/setup-java@v4.6.0
+        uses: actions/setup-java@v4
         with:
-          distribution: "adopt"
+          distribution: "temurin"
           java-version: 17
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3.2.2
+        uses: android-actions/setup-android@v3
+
+      - name: Clone CloudStream
+        run: |
+          git clone https://github.com/Lagradost/CloudStream.git cloudstream
+          cd cloudstream
+          git checkout master
+
+      - name: Build CloudStream to local Maven
+        run: |
+          cd cloudstream
+          ./gradlew publishToMavenLocal
 
       - name: Clean Gradle build cache
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
           ./gradlew clean
-
-      - name: Use official CloudStream version
-        run: |
-          sed -i 's/master-SNAPSHOT/3.1.6/' $GITHUB_WORKSPACE/src/build.gradle.kts
 
       - name: Build Plugins
         run: |
