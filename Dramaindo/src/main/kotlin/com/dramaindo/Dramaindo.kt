@@ -124,16 +124,16 @@ class Dramaindo : MainAPI() {
             }
 
             val links = jsonObject.optJSONArray("links")
-            links?.forEach { linkElement ->
-                val videoUrl = (linkElement as? JSONObject)?.optString("url")
-                if (videoUrl?.isNotBlank() == true) {
-                    arrayList.add(fixUrl(videoUrl))
+            if (links != null) {
+                for (i in 0 until links.length()) {
+                    val linkElement = links.getJSONObject(i)
+                    val videoUrl = linkElement.optString("url")
+                    if (videoUrl.isNotBlank()) arrayList.add(fixUrl(videoUrl))
                 }
             }
         }
 
-        doc.select("iframe[src]").mapNotNull { it.attr("src") }
-            .forEach { arrayList.add(it) }
+        doc.select("iframe[src]").mapNotNull { it.attr("src") }.forEach { arrayList.add(it) }
 
         val validUrls = arrayList.filter { it.startsWith("http") }
         validUrls.forEach { url ->
@@ -191,7 +191,7 @@ class Dramaindo : MainAPI() {
     }
 
     private fun getContent(infoElems: Elements, label: String): Element? {
-        return infoElems.find { it.text().contains(label, true) }?.select("span")
+        return infoElems.find { it.text().contains(label, true) }?.selectFirst("span")
     }
 
     private fun fixUrl(url: String): String {
