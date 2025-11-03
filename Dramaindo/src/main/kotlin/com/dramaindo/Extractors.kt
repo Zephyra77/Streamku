@@ -6,7 +6,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
-import org.jsoup.nodes.Element
 import java.util.Base64
 
 object Extractors {
@@ -51,7 +50,6 @@ class MiteDrive : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) = coroutineScope {
         val ip = app.get("https://ipv4.icanhazip.com").text.trim()
-
         val payload = JSONObject().apply {
             put("ip", ip)
             put("device", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
@@ -59,7 +57,6 @@ class MiteDrive : ExtractorApi() {
             put("cookie", "")
             put("referrer", referer ?: "")
         }
-
         val csrfToken = encodeBase64Twice(payload.toString())
         val slug = url.substringAfterLast("/")
         val apiUrl = "$mainUrl/api/view/"
@@ -71,8 +68,7 @@ class MiteDrive : ExtractorApi() {
 
         if (!videoUrl.isNullOrEmpty()) {
             callback(
-                ExtractorLink(
-                    source = name,
+                newExtractorLink(
                     name = name,
                     url = videoUrl,
                     referer = mainUrl,
@@ -111,12 +107,12 @@ class BerkasDrive : ExtractorApi() {
             }
 
             callback(
-                ExtractorLink(
-                    source = sourceName,
+                newExtractorLink(
                     name = name,
                     url = serverUrl,
                     referer = mainUrl,
-                    quality = 720
+                    quality = 720,
+                    source = sourceName
                 )
             )
         }
