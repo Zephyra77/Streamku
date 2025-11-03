@@ -13,14 +13,14 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.10")
-        classpath("com.lagradost:cloudstream3.gradle:3.1.6") 
+        classpath("com.github.Lagradost:CloudStream:master-SNAPSHOT")
     }
 }
 
 allprojects {
     repositories {
         google()
-        mavenCentral(
+        mavenCentral()
         maven("https://jitpack.io")
     }
 }
@@ -71,7 +71,7 @@ subprojects {
         val cloudstream by configurations
         val implementation by configurations
 
-        cloudstream("com.lagradost:cloudstream3:pre-release")
+        cloudstream("com.github.Lagradost:CloudStream:master-SNAPSHOT")
 
         implementation(kotlin("stdlib"))
         implementation("com.github.Blatzar:NiceHttp:0.4.12")
