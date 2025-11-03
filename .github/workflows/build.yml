@@ -48,6 +48,10 @@ jobs:
           chmod +x gradlew
           ./gradlew clean
 
+      - name: Use official CloudStream version
+        run: |
+          sed -i 's/master-SNAPSHOT/3.1.6/' $GITHUB_WORKSPACE/src/build.gradle.kts
+
       - name: Build Plugins
         run: |
           cd $GITHUB_WORKSPACE/src
