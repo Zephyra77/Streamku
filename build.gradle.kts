@@ -9,10 +9,11 @@ buildscript {
         mavenCentral()
         maven("https://jitpack.io")
     }
+
     dependencies {
         classpath("com.android.tools.build:gradle:8.7.3")
+        classpath("com.github.recloudstream:gradle:3.1.6")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.10")
-        classpath("com.github.recloudstream:gradle:master-SNAPSHOT")
     }
 }
 
@@ -70,7 +71,8 @@ subprojects {
         val cloudstream by configurations
         val implementation by configurations
 
-        cloudstream("com.github.recloudstream:cloudstream:master-SNAPSHOT")
+        cloudstream("com.github.recloudstream:cloudstream:3.1.6")
+
         implementation(kotlin("stdlib"))
         implementation("com.github.Blatzar:NiceHttp:0.4.12")
         implementation("org.jsoup:jsoup:1.19.1")
