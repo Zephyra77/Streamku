@@ -68,14 +68,14 @@ object MiteDrive {
         if (videoUrl.isNotEmpty()) {
             callback.invoke(
                 newExtractorLink(
-                    name,
-                    "720p",
-                    videoUrl,
-                    referer ?: mainUrl,
-                    Qualities.P720.value,
-                    INFER_TYPE,
-                    headers = mapOf("Referer" to (referer ?: mainUrl))
-                )
+                    source = name,
+                    name = "720p",
+                    url = videoUrl,
+                    type = ExtractorLinkType.VIDEO
+                ) {
+                    this.referer = mainUrl
+                    this.quality = Qualities.P720.value
+                }
             )
         }
     }
@@ -116,14 +116,14 @@ object MiteDrive2 {
         if (videoUrl.isNotEmpty()) {
             callback.invoke(
                 newExtractorLink(
-                    name,
-                    "720p",
-                    videoUrl,
-                    referer ?: mainUrl,
-                    Qualities.P720.value,
-                    INFER_TYPE,
-                    headers = mapOf("Referer" to (referer ?: mainUrl))
-                )
+                    source = name,
+                    name = "720p",
+                    url = videoUrl,
+                    type = ExtractorLinkType.VIDEO
+                ) {
+                    this.referer = mainUrl
+                    this.quality = Qualities.P720.value
+                }
             )
         }
     }
@@ -155,14 +155,14 @@ object BerkasDrive {
 
             callback.invoke(
                 newExtractorLink(
-                    sourceName,
-                    "720p",
-                    serverUrl,
-                    referer ?: mainUrl,
-                    Qualities.P720.value,
-                    INFER_TYPE,
-                    headers = mapOf("Referer" to (referer ?: mainUrl))
-                )
+                    source = sourceName,
+                    name = "720p",
+                    url = serverUrl,
+                    type = ExtractorLinkType.VIDEO
+                ) {
+                    this.referer = mainUrl
+                    this.quality = Qualities.P720.value
+                }
             )
         }
     }
