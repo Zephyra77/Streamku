@@ -1,5 +1,27 @@
 [
     {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://anichin.club&size=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 27923,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "mozzaru",
+            "kraptor123"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "Anime",
+            "Cartoon"
+        ],
+        "version": 48,
+        "internalName": "Anichin",
+        "description": "Anime and Movies",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Anichin.cs3",
+        "name": "Anichin"
+    },
+    {
         "iconUrl": "https://www.google.com/s2/favicons?domain=auratail.vip&sz=%size%",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Zephyra77/Streamku",
