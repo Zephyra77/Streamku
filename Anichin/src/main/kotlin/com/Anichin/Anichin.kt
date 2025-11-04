@@ -65,11 +65,13 @@ class Anichin : MainAPI() {
             poster = document.selectFirst("meta[property=og:image]")?.attr("content").orEmpty()
         }
         return if (tvType == TvType.TvSeries) {
-            val episodes = document.select(".eplister li a").map { ep ->
+            val episodes = document.select(".eplister li a").mapIndexed { index, ep ->
                 val epHref = fixUrl(ep.attr("href"))
-                val epTitle = ep.select("span").text().ifBlank { "Episode" }
+                val epTitle = ep.select("span").text().ifBlank { "Episode ${index + 1}" }
+                val epPoster = document.selectFirst("div.ime img")?.attr("src")
                 newEpisode(epHref) {
                     name = epTitle
+                    posterUrl = fixUrlNull(epPoster)
                 }
             }.reversed()
             newTvSeriesLoadResponse(title, url, TvType.Anime, episodes) {
