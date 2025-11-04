@@ -1,4 +1,4 @@
-package com.nontonanimeid
+package com.kotakanimeid
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
@@ -18,7 +18,7 @@ import java.util.Base64
 import java.util.Locale
 
 class NontonAnimeID : MainAPI() {
-    override var mainUrl = "https://kotakanimeid.link"
+    override var mainUrl = "https://s7.nontonanimeid.boats"
     override var name = "NontonAnimeID"
     override val hasQuickSearch = false
     override val hasMainPage = true
@@ -72,9 +72,13 @@ class NontonAnimeID : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val link = "$mainUrl/?s=$query"
+        return searchInternal(query)
+    }
+
+    private suspend fun searchInternal(str: String): List<SearchResponse> {
+        val link = "$mainUrl/?s=$str"
         val document = app.get(link).document
-        return document.select(".result > ul > li").mapNotNull {
+        val results = document.select(".result > ul > li").mapNotNull {
             val title = it.selectFirst("h2")?.text()?.trim().orEmpty()
             val poster = it.selectFirst("img")?.getImageAttr()
             val tvType = getType(it.selectFirst(".boxinfores > span.typeseries")?.text().orEmpty())
@@ -84,15 +88,11 @@ class NontonAnimeID : MainAPI() {
                 addDubStatus(dubExist = false, subExist = true)
             }
         }
+        return results
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val fixUrl = if (url.contains("/anime/")) {
-            url
-        } else {
-            app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
-        }
-
+        val fixUrl = if (url.contains("/anime/")) url else app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
         val req = app.get(fixUrl ?: return null)
         mainUrl = getBaseUrl(req.url)
         val document = req.document
@@ -112,33 +112,7 @@ class NontonAnimeID : MainAPI() {
         val description = document.select(".entry-content.seriesdesc > p").text().trim()
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
-        val episodes = if (document.select("button.buttfilter").isNotEmpty()) {
-            val id = document.select("input[name=series_id]").attr("value")
-            val numEp = document.selectFirst(".latestepisode > a")?.text()?.replace(Regex("\\D"), "").toString()
-            Jsoup.parse(
-                app.post(
-                    "$mainUrl/wp-admin/admin-ajax.php",
-                    data = mapOf(
-                        "misha_number_of_results" to numEp,
-                        "misha_order_by" to "date-DESC",
-                        "action" to "mishafilter",
-                        "series_id" to id
-                    )
-                ).parsed<EpResponse>().content
-            ).select("li").map {
-                val episode = Regex("Episode\\s?(\\d+)").find(it.selectFirst("a")?.text().orEmpty())
-                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
-                val link = fixUrl(it.selectFirst("a")!!.attr("href"))
-                newEpisode(link) { this.episode = episode }
-            }.reversed()
-        } else {
-            document.select("ul.misha_posts_wrap2 > li").map {
-                val episode = Regex("Episode\\s?(\\d+)").find(it.selectFirst("a")?.text().orEmpty())
-                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
-                val link = it.select("a").attr("href")
-                newEpisode(link) { this.episode = episode }
-            }.reversed()
-        }
+        val episodes = getEpisodes(document)
 
         val recommendations = document.select(".result > li").mapNotNull {
             val epHref = it.selectFirst("a")!!.attr("href")
@@ -166,6 +140,36 @@ class NontonAnimeID : MainAPI() {
             this.recommendations = recommendations
             addMalId(tracker?.malId)
             addAniListId(tracker?.aniId?.toIntOrNull())
+        }
+    }
+
+    private fun getEpisodes(document: org.jsoup.nodes.Document): List<Episode> {
+        return if (document.select("button.buttfilter").isNotEmpty()) {
+            val id = document.select("input[name=series_id]").attr("value")
+            val numEp = document.selectFirst(".latestepisode > a")?.text()?.replace(Regex("\\D"), "").toString()
+            Jsoup.parse(
+                app.post(
+                    "$mainUrl/wp-admin/admin-ajax.php",
+                    data = mapOf(
+                        "misha_number_of_results" to numEp,
+                        "misha_order_by" to "date-DESC",
+                        "action" to "mishafilter",
+                        "series_id" to id
+                    )
+                ).parsed<EpResponse>().content
+            ).select("li").map {
+                val episode = Regex("Episode\\s?(\\d+)").find(it.selectFirst("a")?.text().orEmpty())
+                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val link = fixUrl(it.selectFirst("a")!!.attr("href"))
+                newEpisode(link) { this.episode = episode }
+            }.reversed()
+        } else {
+            document.select("ul.misha_posts_wrap2 > li").map {
+                val episode = Regex("Episode\\s?(\\d+)").find(it.selectFirst("a")?.text().orEmpty())
+                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val link = it.select("a").attr("href")
+                newEpisode(link) { this.episode = episode }
+            }.reversed()
         }
     }
 
