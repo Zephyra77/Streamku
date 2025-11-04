@@ -1,4 +1,4 @@
-package com.hexated
+package com.nontonanimeid
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
@@ -11,7 +11,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
 
-class NontonAnimeIDProvider : MainAPI() {
+class NontonAnimeID : MainAPI() {
     override var mainUrl = "https://nontonanimeid.baby"
     override var name = "NontonAnimeID"
     override val hasQuickSearch = false
