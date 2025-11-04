@@ -1,4 +1,4 @@
-package com.kotakanimeid
+package com.nontonanimeid
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
@@ -15,10 +15,11 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
 import java.util.Base64
+import java.util.Locale
 
-class KotakAnime : MainAPI() {
+class NontonAnimeID : MainAPI() {
     override var mainUrl = "https://kotakanimeid.link"
-    override var name = "KotakAnimeID"
+    override var name = "NontonAnimeID"
     override val hasQuickSearch = false
     override val hasMainPage = true
     override var lang = "id"
@@ -56,7 +57,7 @@ class KotakAnime : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val document = app.get("$mainUrl/${request.data}").document
-        val home = document.select(".animeseries").mapNotNull { it.toSearchResult() }
+        val home = document.select(".animeseries, .gacha-grid .gacha-card").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, home, hasNext = false)
     }
 
@@ -113,8 +114,7 @@ class KotakAnime : MainAPI() {
 
         val episodes = if (document.select("button.buttfilter").isNotEmpty()) {
             val id = document.select("input[name=series_id]").attr("value")
-            val numEp = document.selectFirst(".latestepisode > a")?.text()
-                ?.replace(Regex("\\D"), "").toString()
+            val numEp = document.selectFirst(".latestepisode > a")?.text()?.replace(Regex("\\D"), "").toString()
             Jsoup.parse(
                 app.post(
                     "$mainUrl/wp-admin/admin-ajax.php",
@@ -211,9 +211,7 @@ class KotakAnime : MainAPI() {
         true
     }
 
-    private fun getBaseUrl(url: String): String {
-        return URI(url).let { "${it.scheme}://${it.host}" }
-    }
+    private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
 
     private fun Element.getImageAttr(): String? {
         return when {
@@ -224,9 +222,7 @@ class KotakAnime : MainAPI() {
         }
     }
 
-    private fun base64Decode(input: String): String {
-        return String(Base64.getDecoder().decode(input))
-    }
+    private fun base64Decode(input: String): String = String(Base64.getDecoder().decode(input))
 
     private data class EpResponse(
         @JsonProperty("posts") val posts: String?,
