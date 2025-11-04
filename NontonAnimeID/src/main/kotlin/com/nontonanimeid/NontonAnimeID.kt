@@ -45,7 +45,7 @@ class NontonAnimeID : MainAPI() {
 
     override val mainPage = mainPageOf(
         "" to "Latest Update",
-        "ongoing-list/" to " Ongoing List",
+        "ongoing-list/" to "Ongoing List",
         "popular-series/" to "Popular Series",
     )
 
@@ -66,7 +66,6 @@ class NontonAnimeID : MainAPI() {
             this.posterUrl = posterUrl
             addDubStatus(dubExist = false, subExist = true)
         }
-
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -166,7 +165,7 @@ class NontonAnimeID : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.rating = rating
+            this.score = rating?.toDouble()
             plot = description
             addTrailer(trailer)
             this.tags = tags
@@ -174,7 +173,6 @@ class NontonAnimeID : MainAPI() {
             addMalId(tracker?.malId)
             addAniListId(tracker?.aniId?.toIntOrNull())
         }
-
     }
 
     override suspend fun loadLinks(
@@ -190,7 +188,7 @@ class NontonAnimeID : MainAPI() {
             document.select("script#ajax_video-js-extra").attr("src").substringAfter("base64,")
                 .let { Regex("nonce\":\"(\\S+?)\"").find(base64Decode(it))?.groupValues?.get(1) }
 
-        document.select(".container1 > ul > li:not(.boxtab)").apmap {
+        document.select(".container1 > ul > li:not(.boxtab)").parallelMap {
             val dataPost = it.attr("data-post")
             val dataNume = it.attr("data-nume")
             val serverName = it.attr("data-type").lowercase()
@@ -211,7 +209,7 @@ class NontonAnimeID : MainAPI() {
                     .attr("data-src") else it
             }
 
-            loadExtractor(iframe ?: return@apmap, "$mainUrl/", subtitleCallback, callback)
+            loadExtractor(iframe ?: return@parallelMap, "$mainUrl/", subtitleCallback, callback)
         }
 
         return true
@@ -238,5 +236,4 @@ class NontonAnimeID : MainAPI() {
         @JsonProperty("found_posts") val found_posts: Int?,
         @JsonProperty("content") val content: String
     )
-
 }
