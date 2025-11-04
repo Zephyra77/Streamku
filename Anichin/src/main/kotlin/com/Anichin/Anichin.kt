@@ -68,23 +68,21 @@ class Anichin : MainAPI() {
         return if (tvType == TvType.TvSeries) {
             val episodes = document.select(".eplister li").map { ep ->
                 val link = fixUrl(ep.selectFirst("a")?.attr("href").orEmpty())
-                val epNum = ep.selectFirst(".epl-num")?.text()?.trim().orEmpty()
                 val epTitle = ep.selectFirst(".epl-title")?.text()?.trim().orEmpty()
                 val epSub = ep.selectFirst(".epl-sub span")?.text()?.trim().orEmpty()
                 val epDate = ep.selectFirst(".epl-date")?.text()?.trim().orEmpty()
 
                 val cleanTitle = epTitle
-                    .replace("Episode $epNum Subtitle Indonesia", "")
+                    .replace(Regex("Episode\\s*\\d+\\s*Subtitle Indonesia", RegexOption.IGNORE_CASE), "")
                     .replace("Subtitle Indonesia", "")
                     .trim()
 
-                val name = "$epNum — $cleanTitle $epSub Indonesia".trim()
+                val name = "— $cleanTitle $epSub Indonesia".trim()
                 val desc = if (epDate.isNotEmpty()) "Rilis: $epDate" else null
 
                 newEpisode(link) {
                     this.name = name
                     this.posterUrl = fixUrlNull(poster)
-                    this.episode = epNum.toIntOrNull()
                     this.description = desc
                 }
             }.reversed()
