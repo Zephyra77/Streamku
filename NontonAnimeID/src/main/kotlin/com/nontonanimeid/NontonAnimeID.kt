@@ -1,4 +1,4 @@
-package com.nontonanimeid
+package com.kotakanimeid
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
@@ -16,9 +16,9 @@ import org.jsoup.nodes.Element
 import java.net.URI
 import java.util.Base64
 
-class NontonAnimeID : MainAPI() {
-    override var mainUrl = "https://nontonanimeid.baby"
-    override var name = "NontonAnimeID"
+class KotakAnime : MainAPI() {
+    override var mainUrl = "https://kotakanimeid.link"
+    override var name = "KotakAnimeID"
     override val hasQuickSearch = false
     override val hasMainPage = true
     override var lang = "id"
