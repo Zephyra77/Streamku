@@ -14,6 +14,7 @@ import kotlinx.coroutines.coroutineScope
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
+import java.util.Base64
 
 class NontonAnimeID : MainAPI() {
     override var mainUrl = "https://nontonanimeid.baby"
@@ -158,7 +159,7 @@ class NontonAnimeID : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.score = rating?.let { Score(it) }
+            this.score = rating
             plot = description
             addTrailer(trailer)
             this.tags = tags
@@ -175,9 +176,8 @@ class NontonAnimeID : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val document = app.get(data).document
-        val nonce = document.select("script#ajax_video-js-extra").attr("src")
-            .substringAfter("base64,")
-            .let { Regex("nonce\":\"(\\S+?)\"").find(base64Decode(it))?.groupValues?.get(1) }
+        val script = document.selectFirst("script#ajax_video-js-extra")?.data() ?: ""
+        val nonce = Regex("nonce\":\"(\\w+)\"").find(script)?.groupValues?.getOrNull(1)
 
         val servers = document.select(".container1 > ul > li:not(.boxtab)")
         servers.map { element ->
@@ -222,6 +222,10 @@ class NontonAnimeID : MainAPI() {
             this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
             else -> this.attr("abs:src")
         }
+    }
+
+    private fun base64Decode(input: String): String {
+        return String(Base64.getDecoder().decode(input))
     }
 
     private data class EpResponse(
