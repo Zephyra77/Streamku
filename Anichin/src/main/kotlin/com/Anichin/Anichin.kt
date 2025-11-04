@@ -56,31 +56,36 @@ class Anichin : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(fixUrl(url)).document
-        val title = document.selectFirst("h1.entry-title")?.text()?.trim().toString()
+        val title = document.selectFirst("h1.entry-title")?.text()?.trim().orEmpty()
         var poster = document.select("div.ime > img").attr("src")
-        val description = document.selectFirst("div.entry-content")?.text()?.trim()
+        val description = document.selectFirst("div.entry-content")?.text()?.trim().orEmpty()
         val type = document.selectFirst(".spe")?.text().orEmpty()
         val tvType = if (type.contains("Movie", true)) TvType.Movie else TvType.TvSeries
         if (poster.isEmpty()) {
             poster = document.selectFirst("meta[property=og:image]")?.attr("content").orEmpty()
         }
+
         return if (tvType == TvType.TvSeries) {
-            val episodes = document.select(".eplister li a").mapIndexed { index, ep ->
-                val epHref = fixUrl(ep.attr("href"))
-                val epTitle = ep.select("span").text().ifBlank { "Episode ${index + 1}" }
-                val epPoster = document.selectFirst("div.ime img")?.attr("src")
-                newEpisode(epHref) {
-                    name = epTitle
-                    posterUrl = fixUrlNull(epPoster)
+            val episodes = document.select(".eplister li").mapIndexed { index, ep ->
+                val epLink = fixUrl(ep.selectFirst("a")?.attr("href").orEmpty())
+                val epName = ep.selectFirst("a span")?.text()
+                    ?.replace("Episode", "Ep")?.trim()
+                    ?.ifBlank { "Episode ${index + 1}" }
+                    ?: "Episode ${index + 1}"
+                val epPoster = fixUrlNull(ep.selectFirst("img")?.attr("src")) ?: fixUrlNull(poster)
+                newEpisode(epLink) {
+                    name = epName
+                    posterUrl = epPoster
                 }
             }.reversed()
+
             newTvSeriesLoadResponse(title, url, TvType.Anime, episodes) {
                 this.posterUrl = fixUrlNull(poster)
                 this.plot = description
             }
         } else {
-            val movieHref = document.selectFirst(".eplister li > a")?.attr("href")?.let { fixUrl(it) } ?: url
-            newMovieLoadResponse(title, movieHref, TvType.Movie, movieHref) {
+            val movieLink = document.selectFirst(".eplister li > a")?.attr("href")?.let { fixUrl(it) } ?: url
+            newMovieLoadResponse(title, movieLink, TvType.Movie, movieLink) {
                 this.posterUrl = fixUrlNull(poster)
                 this.plot = description
             }
