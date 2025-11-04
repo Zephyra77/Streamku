@@ -158,7 +158,7 @@ class NontonAnimeID : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.score = rating?.let { Score.fromDouble(it) }
+            this.score = rating?.let { Score(it) }
             plot = description
             addTrailer(trailer)
             this.tags = tags
