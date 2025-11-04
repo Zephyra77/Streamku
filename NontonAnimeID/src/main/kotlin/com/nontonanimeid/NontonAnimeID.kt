@@ -87,12 +87,7 @@ class NontonAnimeID : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val fixUrl = if (url.contains("/anime/")) {
-            url
-        } else {
-            app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
-        }
-
+        val fixUrl = if (url.contains("/anime/")) url else app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
         val req = app.get(fixUrl ?: return null)
         mainUrl = getBaseUrl(req.url)
         val document = req.document
@@ -102,50 +97,16 @@ class NontonAnimeID : MainAPI() {
         val poster = document.selectFirst(".poster > img")?.getImageAttr()
         val tags = document.select(".tagline > a").map { it.text() }
 
-        val year = Regex("\\d, (\\d*)").find(
-            document.select(".bottomtitle > span:nth-child(5)").text()
-        )?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val year = Regex("\\d, (\\d*)").find(document.select(".bottomtitle > span:nth-child(5)").text())
+            ?.groupValues?.getOrNull(1)?.toIntOrNull()
 
         val status = getStatus(document.select("span.statusseries").text().trim())
-        val type = getType(document.select("span.typeseries").text().trim().lowercase())
+        val type = getType(document.select("span.typeseries").text().trim().lowercase(Locale.getDefault()))
         val rating = document.select("span.nilaiseries").text().trim().toDoubleOrNull()
-        val score = rating?.let { Score(it) }
         val description = document.select(".entry-content.seriesdesc > p").text().trim()
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
-        val episodes = getEpisodes(document)
-
-        val recommendations = document.select(".result > li").mapNotNull {
-            val epHref = it.selectFirst("a")!!.attr("href")
-            val epTitle = it.selectFirst("h3")!!.text()
-            val epPoster = it.selectFirst(".top > img")?.getImageAttr()
-            newAnimeSearchResponse(epTitle, epHref, TvType.Anime) {
-                this.posterUrl = epPoster
-                addDubStatus(dubExist = false, subExist = true)
-            }
-        }
-
-        val tracker = APIHolder.getTracker(listOf(title), TrackerType.getTypes(type), year, true)
-
-        return newAnimeLoadResponse(title, url, type) {
-            engName = title
-            posterUrl = tracker?.image ?: poster
-            backgroundPosterUrl = tracker?.cover
-            this.year = year
-            addEpisodes(DubStatus.Subbed, episodes)
-            showStatus = status
-            this.score = score
-            plot = description
-            addTrailer(trailer)
-            this.tags = tags
-            this.recommendations = recommendations
-            addMalId(tracker?.malId)
-            addAniListId(tracker?.aniId?.toIntOrNull())
-        }
-    }
-
-    private suspend fun getEpisodes(document: org.jsoup.nodes.Document): List<Episode> {
-        return if (document.select("button.buttfilter").isNotEmpty()) {
+        val episodes = if (document.select("button.buttfilter").isNotEmpty()) {
             val id = document.select("input[name=series_id]").attr("value")
             val numEp = document.selectFirst(".latestepisode > a")?.text()?.replace(Regex("\\D"), "").toString()
             Jsoup.parse(
@@ -171,6 +132,34 @@ class NontonAnimeID : MainAPI() {
                 val link = it.select("a").attr("href")
                 newEpisode(link) { this.episode = episode }
             }.reversed()
+        }
+
+        val recommendations = document.select(".result > li").mapNotNull {
+            val epHref = it.selectFirst("a")!!.attr("href")
+            val epTitle = it.selectFirst("h3")!!.text()
+            val epPoster = it.selectFirst(".top > img")?.getImageAttr()
+            newAnimeSearchResponse(epTitle, epHref, TvType.Anime) {
+                this.posterUrl = epPoster
+                addDubStatus(dubExist = false, subExist = true)
+            }
+        }
+
+        val tracker = APIHolder.getTracker(listOf(title), TrackerType.getTypes(type), year, true)
+
+        return newAnimeLoadResponse(title, url, type) {
+            engName = title
+            posterUrl = tracker?.image ?: poster
+            backgroundPosterUrl = tracker?.cover
+            this.year = year
+            addEpisodes(DubStatus.Subbed, episodes)
+            showStatus = status
+            this.score = rating
+            plot = description
+            addTrailer(trailer)
+            this.tags = tags
+            this.recommendations = recommendations
+            addMalId(tracker?.malId)
+            addAniListId(tracker?.aniId?.toIntOrNull())
         }
     }
 
@@ -208,9 +197,7 @@ class NontonAnimeID : MainAPI() {
                     else it
                 }
 
-                iframe?.let {
-                    loadExtractor(it, mainUrl, subtitleCallback, callback)
-                }
+                iframe?.let { loadExtractor(it, mainUrl, subtitleCallback, callback) }
             }
         }.awaitAll()
         true
@@ -218,13 +205,11 @@ class NontonAnimeID : MainAPI() {
 
     private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
 
-    private fun Element.getImageAttr(): String? {
-        return when {
-            this.hasAttr("data-src") -> this.attr("abs:data-src")
-            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
-            this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
-            else -> this.attr("abs:src")
-        }
+    private fun Element.getImageAttr(): String? = when {
+        this.hasAttr("data-src") -> this.attr("abs:data-src")
+        this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
+        this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
+        else -> this.attr("abs:src")
     }
 
     private fun base64Decode(input: String): String = String(Base64.getDecoder().decode(input))
