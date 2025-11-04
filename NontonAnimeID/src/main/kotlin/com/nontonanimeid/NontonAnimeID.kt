@@ -15,10 +15,9 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
 import java.util.Base64
-import java.util.Locale
 
 class NontonAnimeID : MainAPI() {
-    override var mainUrl = "https://s7.nontonanimeid.boats"
+    override var mainUrl = "https://kotakanimeid.link"
     override var name = "NontonAnimeID"
     override val hasQuickSearch = false
     override val hasMainPage = true
@@ -87,7 +86,12 @@ class NontonAnimeID : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val fixUrl = if (url.contains("/anime/")) url else app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
+        val fixUrl = if (url.contains("/anime/")) {
+            url
+        } else {
+            app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
+        }
+
         val req = app.get(fixUrl ?: return null)
         mainUrl = getBaseUrl(req.url)
         val document = req.document
@@ -97,11 +101,12 @@ class NontonAnimeID : MainAPI() {
         val poster = document.selectFirst(".poster > img")?.getImageAttr()
         val tags = document.select(".tagline > a").map { it.text() }
 
-        val year = Regex("\\d, (\\d*)").find(document.select(".bottomtitle > span:nth-child(5)").text())
-            ?.groupValues?.getOrNull(1)?.toIntOrNull()
+        val year = Regex("\\d, (\\d*)").find(
+            document.select(".bottomtitle > span:nth-child(5)").text()
+        )?.groupValues?.getOrNull(1)?.toIntOrNull()
 
         val status = getStatus(document.select("span.statusseries").text().trim())
-        val type = getType(document.select("span.typeseries").text().trim().lowercase(Locale.getDefault()))
+        val type = getType(document.select("span.typeseries").text().trim().lowercase())
         val rating = document.select("span.nilaiseries").text().trim().toDoubleOrNull()
         val description = document.select(".entry-content.seriesdesc > p").text().trim()
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
@@ -153,7 +158,7 @@ class NontonAnimeID : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.score = rating
+            this.score = rating?.let { Score.fromDouble(it) }
             plot = description
             addTrailer(trailer)
             this.tags = tags
@@ -197,7 +202,9 @@ class NontonAnimeID : MainAPI() {
                     else it
                 }
 
-                iframe?.let { loadExtractor(it, mainUrl, subtitleCallback, callback) }
+                iframe?.let {
+                    loadExtractor(it, mainUrl, subtitleCallback, callback)
+                }
             }
         }.awaitAll()
         true
@@ -205,11 +212,13 @@ class NontonAnimeID : MainAPI() {
 
     private fun getBaseUrl(url: String): String = URI(url).let { "${it.scheme}://${it.host}" }
 
-    private fun Element.getImageAttr(): String? = when {
-        this.hasAttr("data-src") -> this.attr("abs:data-src")
-        this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
-        this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
-        else -> this.attr("abs:src")
+    private fun Element.getImageAttr(): String? {
+        return when {
+            this.hasAttr("data-src") -> this.attr("abs:data-src")
+            this.hasAttr("data-lazy-src") -> this.attr("abs:data-lazy-src")
+            this.hasAttr("srcset") -> this.attr("abs:srcset").substringBefore(" ")
+            else -> this.attr("abs:src")
+        }
     }
 
     private fun base64Decode(input: String): String = String(Base64.getDecoder().decode(input))
