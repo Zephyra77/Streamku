@@ -72,13 +72,9 @@ class NontonAnimeID : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        return searchInternal(query)
-    }
-
-    private suspend fun searchInternal(str: String): List<SearchResponse> {
-        val link = "$mainUrl/?s=$str"
+        val link = "$mainUrl/?s=$query"
         val document = app.get(link).document
-        val results = document.select(".result > ul > li").mapNotNull {
+        return document.select(".result > ul > li").mapNotNull {
             val title = it.selectFirst("h2")?.text()?.trim().orEmpty()
             val poster = it.selectFirst("img")?.getImageAttr()
             val tvType = getType(it.selectFirst(".boxinfores > span.typeseries")?.text().orEmpty())
@@ -88,11 +84,15 @@ class NontonAnimeID : MainAPI() {
                 addDubStatus(dubExist = false, subExist = true)
             }
         }
-        return results
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val fixUrl = if (url.contains("/anime/")) url else app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
+        val fixUrl = if (url.contains("/anime/")) {
+            url
+        } else {
+            app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
+        }
+
         val req = app.get(fixUrl ?: return null)
         mainUrl = getBaseUrl(req.url)
         val document = req.document
@@ -109,6 +109,7 @@ class NontonAnimeID : MainAPI() {
         val status = getStatus(document.select("span.statusseries").text().trim())
         val type = getType(document.select("span.typeseries").text().trim().lowercase())
         val rating = document.select("span.nilaiseries").text().trim().toDoubleOrNull()
+        val score = rating?.let { Score(it) }
         val description = document.select(".entry-content.seriesdesc > p").text().trim()
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
@@ -133,7 +134,7 @@ class NontonAnimeID : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.score = rating
+            this.score = score
             plot = description
             addTrailer(trailer)
             this.tags = tags
@@ -143,7 +144,7 @@ class NontonAnimeID : MainAPI() {
         }
     }
 
-    private fun getEpisodes(document: org.jsoup.nodes.Document): List<Episode> {
+    private suspend fun getEpisodes(document: org.jsoup.nodes.Document): List<Episode> {
         return if (document.select("button.buttfilter").isNotEmpty()) {
             val id = document.select("input[name=series_id]").attr("value")
             val numEp = document.selectFirst(".latestepisode > a")?.text()?.replace(Regex("\\D"), "").toString()
