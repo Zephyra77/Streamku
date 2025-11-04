@@ -6,7 +6,6 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.mozilla.javascript.Context
@@ -58,7 +57,7 @@ open class Vidguardto : ExtractorApi() {
     }
 
     @OptIn(ExperimentalEncodingApi::class)
-	private fun sigDecode(url: String): String {
+    private fun sigDecode(url: String): String {
         val sig = url.split("sig=")[1].split("&")[0]
         val t = sig.chunked(2)
             .joinToString("") { (Integer.parseInt(it, 16) xor 2).toChar().toString() }
@@ -89,8 +88,7 @@ open class Vidguardto : ExtractorApi() {
         var result = ""
         val r = Runnable {
             val rhino = Context.enter()
-            rhino.initSafeStandardObjects()
-            rhino.setInterpretedMode(true)
+            rhino.optimizationLevel = -1
             val scope: Scriptable = rhino.initSafeStandardObjects()
             scope.put("window", scope, scope)
             try {
@@ -119,13 +117,13 @@ open class Vidguardto : ExtractorApi() {
                 Context.exit()
             }
         }
-        val t = Thread(ThreadGroup("A"), r, "thread_rhino", 8 * 1024 * 1024) // Increase stack size to 8MB
+        val t = Thread(ThreadGroup("A"), r, "thread_rhino", 8 * 1024 * 1024)
         t.start()
         t.join()
         t.interrupt()
         return result
     }
-	
+
     private fun getEmbedUrl(url: String): String {
         return url.takeIf { it.contains("/d/") || it.contains("/v/") }
             ?.replace("/d/", "/e/")?.replace("/v/", "/e/") ?: url
@@ -134,6 +132,5 @@ open class Vidguardto : ExtractorApi() {
     data class SvgObject(
         val stream: String,
         val hash: String
-    )	
-	
+    )
 }
