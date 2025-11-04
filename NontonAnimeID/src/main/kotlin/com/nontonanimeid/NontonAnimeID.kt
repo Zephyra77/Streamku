@@ -15,6 +15,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
 import java.util.Base64
+import java.util.Locale
 
 class NontonAnimeID : MainAPI() {
     override var mainUrl = "https://kotakanimeid.link"
@@ -158,7 +159,7 @@ class NontonAnimeID : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.score = rating?.let { Score.fromDouble(it) }
+            this.score = rating
             plot = description
             addTrailer(trailer)
             this.tags = tags
