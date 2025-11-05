@@ -31,7 +31,7 @@ class MidasMovie : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
-        val poster = selectFirst("img")?.attr("src")
+        val posterUrl = selectFirst("img")?.attr("src")
         val quality = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
@@ -39,7 +39,7 @@ class MidasMovie : MainAPI() {
             name = title,
             url = href,
             type = type,
-            poster = poster,
+            posterUrl = posterUrl,
             quality = quality?.let { getQualityFromString(it) } ?: 0
         )
     }
@@ -58,7 +58,7 @@ class MidasMovie : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
-        val poster = doc.selectFirst(".poster img")?.attr("src")
+        val posterUrl = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
@@ -69,12 +69,11 @@ class MidasMovie : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull() ?: 0
-
             newEpisode(
                 name = nameEp,
                 url = linkEp,
                 episode = epNum,
-                poster = posterEp
+                posterUrl = posterEp
             )
         }
 
@@ -83,7 +82,7 @@ class MidasMovie : MainAPI() {
                 name = title,
                 url = url,
                 type = TvType.TvSeries,
-                poster = poster,
+                posterUrl = posterUrl,
                 year = year,
                 plot = plot,
                 tags = tags,
@@ -95,12 +94,11 @@ class MidasMovie : MainAPI() {
                 name = title,
                 url = url,
                 type = TvType.Movie,
-                poster = poster,
+                posterUrl = posterUrl,
                 year = year,
                 plot = plot,
                 tags = tags,
-                actors = actors,
-                dataUrl = url
+                actors = actors
             )
         }
     }
