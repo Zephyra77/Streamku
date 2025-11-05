@@ -5,7 +5,7 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
-class MidasMovie : MainAPI() {
+class MidasMovieProvider : MainAPI() {
     override var name = "MidasMovie"
     override var mainUrl = "https://midasmovie.live"
     override var lang = "id"
@@ -27,14 +27,17 @@ class MidasMovie : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
-        val posterUrl = selectFirst("img")?.attr("src")
+        val poster = selectFirst("img")?.attr("src")
         val quality = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
-        return newMovieSearchResponse(title, href, type = type).apply {
-            this.posterUrl = posterUrl
-            this.quality = getQualityFromString(quality)
-        }
+        return newMovieSearchResponse(
+            title = title,
+            url = href,
+            type = type,
+            posterUrl = poster,
+            quality = getQualityFromString(quality)
+        )
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -51,7 +54,7 @@ class MidasMovie : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
-        val posterUrl = doc.selectFirst(".poster img")?.attr("src")
+        val poster = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
@@ -62,9 +65,12 @@ class MidasMovie : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(nameEp, linkEp, episode = epNum).apply {
-                this.posterUrl = posterEp
-            }
+            newEpisode(
+                name = nameEp,
+                url = linkEp,
+                episode = epNum,
+                posterUrl = posterEp
+            )
         }
 
         return if (episodes.isNotEmpty()) {
@@ -72,9 +78,9 @@ class MidasMovie : MainAPI() {
                 title = title,
                 url = url,
                 type = TvType.TvSeries,
-                posterUrl = posterUrl,
+                posterUrl = poster,
                 year = year,
-                plot = plot,
+                description = plot,
                 tags = tags,
                 episodes = episodes
             ).addActors(actors)
@@ -83,21 +89,21 @@ class MidasMovie : MainAPI() {
                 title = title,
                 url = url,
                 type = TvType.Movie,
-                posterUrl = posterUrl,
+                posterUrl = poster,
                 year = year,
-                plot = plot,
+                description = plot,
                 tags = tags
             ).addActors(actors)
         }
     }
 
     override suspend fun loadLinks(
-        data: String,
+        dataUrl: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data).document
+        val doc = app.get(dataUrl).document
         val sources = doc.select("li.dooplay_player_option")
 
         for (src in sources) {
@@ -113,16 +119,19 @@ class MidasMovie : MainAPI() {
                     "nume" to nume,
                     "type" to type
                 ),
-                referer = data,
+                referer = dataUrl,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            loadExtractor(fixUrl(iframeUrl)) { link ->
+            loadExtractor(
+                url = fixUrl(iframeUrl),
+                dataUrl = dataUrl,
+                subtitleCallback = subtitleCallback
+            ) { link ->
                 callback(link)
             }
         }
-
         return true
     }
 }
