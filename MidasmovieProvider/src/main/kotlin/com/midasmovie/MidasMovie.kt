@@ -95,12 +95,12 @@ class MidasMovie : MainAPI() {
                 name = title,
                 url = url,
                 type = TvType.Movie,
-                dataUrl = url,
                 poster = poster,
                 year = year,
                 plot = plot,
                 tags = tags,
-                actors = actors
+                actors = actors,
+                dataUrl = url
             )
         }
     }
@@ -132,7 +132,7 @@ class MidasMovie : MainAPI() {
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            loadExtractor(fixUrl(iframeUrl)) { link ->
+            loadExtractor(fixUrl(iframeUrl)) { link: ExtractorLink ->
                 callback(link)
             }
         }
