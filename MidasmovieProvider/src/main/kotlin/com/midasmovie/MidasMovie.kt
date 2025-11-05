@@ -32,39 +32,39 @@ class MidasMovie : MainAPI() {
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
         return newMovieSearchResponse(title, href, type = type).apply {
-            poster = poster
+            this.poster = poster
             this.quality = getQualityFromString(quality)
         }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val doc = app.get(request.data).document
-        val items = doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
+        val items = doc.select("#dt-movies article.item.movies, #dt-movies article.item.series")
+            .mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val doc = app.get("$mainUrl/?s=$query").document
-        return doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
+        return doc.select("#dt-movies article.item.movies, #dt-movies article.item.series")
+            .mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
-        val poster = doc.selectFirst(".poster img")?.attr("src")
+        val title = doc.selectFirst("h1.entry-title, h1")?.text()?.trim() ?: "No title"
+        val poster = doc.selectFirst(".poster img, .postimg img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
-        val tags = doc.select(".sgeneros a").map { it.text() }
-        val actors = doc.select(".person .data h3").map { it.text() }
+        val tags = doc.select(".sgeneros a, .tags a").map { it.text() }
+        val actors = doc.select(".person .data h3, .actors h3").map { it.text() }
 
-        val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
+        val episodes = doc.select("#seasons .se-a ul.episodios li, .episodes li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(nameEp, linkEp, episode = epNum).apply {
-                poster = posterEp
-            }
+            newEpisode(nameEp, linkEp, episode = epNum).apply { poster = posterEp }
         }
 
         return if (episodes.isNotEmpty()) {
@@ -92,7 +92,7 @@ class MidasMovie : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val doc = app.get(data).document
-        val sources = doc.select("li.dooplay_player_option")
+        val sources = doc.select("li.dooplay_player_option, li.player_option")
 
         for (src in sources) {
             val post = src.attr("data-post")
@@ -111,12 +111,15 @@ class MidasMovie : MainAPI() {
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
 
-            val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            loadExtractor(fixUrl(iframeUrl), data, subtitleCallback) { url, name, quality, isM3u8 ->
-                callback(newExtractorLink(name = name, url = url, referer = data, isM3u8 = isM3u8))
+            val iframes = ajaxResponse.select("iframe, source, video")
+            for (iframe in iframes) {
+                val url = iframe.attr("src").ifEmpty { iframe.attr("data-src") }.ifEmpty { continue }
+                val label = iframe.attr("data-label").ifEmpty { iframe.attr("title").ifEmpty { "Default" } }
+                val quality = iframe.attr("data-quality").ifEmpty { getQualityFromString(label) }
+                val isM3u8 = url.endsWith(".m3u8")
+                callback(newExtractorLink(name = label, url = fixUrl(url), referer = data, isM3u8 = isM3u8))
             }
         }
-
         return true
     }
 }
