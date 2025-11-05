@@ -27,11 +27,17 @@ class MidasMovie : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
+        val poster = selectFirst("img")?.attr("src")
         val quality = selectFirst(".mepo .quality")?.text()
-
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
-        return newMovieSearchResponse(title, href, type)
+        return newMovieSearchResponse(
+            name = title,
+            url = href,
+            type = type,
+            posterUrl = poster,
+            quality = getQualityFromString(quality)
+        )
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -50,6 +56,7 @@ class MidasMovie : MainAPI() {
 
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
         val poster = doc.selectFirst(".poster img")?.attr("src")
+        val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
         val actors = doc.select(".person .data h3").map { it.text() }
@@ -57,14 +64,38 @@ class MidasMovie : MainAPI() {
         val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
+            val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(nameEp, linkEp, epNum)
+
+            newEpisode(
+                name = nameEp,
+                url = linkEp,
+                episode = epNum,
+                posterUrl = posterEp
+            )
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, episodes, poster, plot = plot, tags = tags).addActors(actors)
+            newTvSeriesLoadResponse(
+                name = title,
+                url = url,
+                type = TvType.TvSeries,
+                episodes = episodes,
+                posterUrl = poster,
+                year = year,
+                plot = plot,
+                tags = tags
+            ).addActors(actors)
         } else {
-            newMovieLoadResponse(title, url, poster, plot = plot, tags = tags).addActors(actors)
+            newMovieLoadResponse(
+                name = title,
+                url = url,
+                type = TvType.Movie,
+                posterUrl = poster,
+                year = year,
+                plot = plot,
+                tags = tags
+            ).addActors(actors)
         }
     }
 
