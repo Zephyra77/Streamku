@@ -73,7 +73,7 @@ class MidasMovie : MainAPI() {
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes, dataUrl = url) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
@@ -81,7 +81,7 @@ class MidasMovie : MainAPI() {
                 this.actors = actors
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie) {
+            newMovieLoadResponse(title, url, TvType.Movie, dataUrl = url) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
