@@ -2,7 +2,6 @@ package com.midasmovie
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
@@ -12,7 +11,7 @@ class MidasMovie : MainAPI() {
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)
 
     override val mainPage = mainPageOf(
         "$mainUrl/" to "Terbaru",
@@ -29,16 +28,13 @@ class MidasMovie : MainAPI() {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
         val poster = selectFirst("img")?.attr("src")
-        val quality = selectFirst(".mepo .quality")?.text()
+        val qualityStr = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
-        return newMovieSearchResponse(
-            name = title,
-            url = href,
-            type = type,
-            posterUrl = poster,
-            quality = getQualityFromString(quality)
-        )
+        return newMovieSearchResponse(title, href, type).apply {
+            this.posterUrl = poster
+            this.quality = getQualityFromString(qualityStr)
+        }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -66,35 +62,29 @@ class MidasMovie : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(
-                name = nameEp,
-                url = linkEp,
-                episode = epNum,
+            newEpisode(linkEp).apply {
+                name = nameEp
+                episode = epNum
                 posterUrl = posterEp
-            )
+            }
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(
-                name = title,
-                url = url,
-                type = TvType.TvSeries,
-                posterUrl = poster,
-                year = year,
-                plot = plot,
-                tags = tags,
-                episodes = episodes
-            ).addActors(actors)
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes).apply {
+                this.posterUrl = poster
+                this.plot = plot
+                this.tags = tags
+                this.year = year
+                addActors(actors)
+            }
         } else {
-            newMovieLoadResponse(
-                name = title,
-                url = url,
-                type = TvType.Movie,
-                posterUrl = poster,
-                year = year,
-                plot = plot,
-                tags = tags
-            ).addActors(actors)
+            newMovieLoadResponse(title, url, TvType.Movie).apply {
+                this.posterUrl = poster
+                this.plot = plot
+                this.tags = tags
+                this.year = year
+                addActors(actors)
+            }
         }
     }
 
@@ -106,7 +96,6 @@ class MidasMovie : MainAPI() {
     ): Boolean {
         val doc = app.get(data).document
         val sources = doc.select("li.dooplay_player_option")
-        val fallbackLinks = mutableListOf<ExtractorLink>()
 
         for (src in sources) {
             val post = src.attr("data-post")
@@ -126,24 +115,11 @@ class MidasMovie : MainAPI() {
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            val qualityText = src.text().substringBefore("p").toIntOrNull() ?: 0
-
-            fallbackLinks.add(
-                ExtractorLink(
-                    source = "MidasMovie",
-                    name = "Episode/Video",
-                    url = fixUrl(iframeUrl),
-                    referer = data,
-                    quality = qualityText,
-                    isM3u8 = false,
-                    headers = mapOf("Referer" to data),
-                    extractorData = null
-                )
-            )
+            newExtractorLink(url = fixUrl(iframeUrl), name = "Video", referer = data).let {
+                callback(it)
+            }
         }
 
-        fallbackLinks.forEach { callback(it) }
-
-        return fallbackLinks.isNotEmpty()
+        return true
     }
 }
