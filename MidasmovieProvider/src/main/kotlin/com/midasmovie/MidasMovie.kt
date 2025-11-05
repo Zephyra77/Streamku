@@ -27,11 +27,12 @@ class MidasMovie : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
-        val poster = selectFirst("img")?.attr("src")
+        val posterUrl = selectFirst("img")?.attr("src")
         val quality = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
+
         return newMovieSearchResponse(title, href, type = type).apply {
-            posterUrl = poster
+            posterUrl?.let { poster = it }
             this.quality = getQualityFromString(quality)
         }
     }
@@ -50,30 +51,35 @@ class MidasMovie : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
-        val poster = doc.selectFirst(".poster img")?.attr("src")
+        val posterUrl = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
         val actors = doc.select(".person .data h3").map { it.text() }
+
         val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(nameEp, linkEp, episode = epNum).apply { posterUrl = posterEp }
+
+            newEpisode(nameEp, linkEp, episode = epNum).apply {
+                posterEp?.let { posterUrl = it }
+            }
         }
+
         return if (episodes.isNotEmpty()) {
             newTvSeriesLoadResponse(title, url, type = TvType.TvSeries, episodes = episodes).apply {
-                posterUrl = poster
+                posterUrl?.let { poster = it }
                 this.year = year
-                description = plot
+                this.plot = plot
                 this.tags = tags
             }.addActors(actors)
         } else {
             newMovieLoadResponse(title, url, type = TvType.Movie).apply {
-                posterUrl = poster
+                posterUrl?.let { poster = it }
                 this.year = year
-                description = plot
+                this.plot = plot
                 this.tags = tags
             }.addActors(actors)
         }
@@ -87,10 +93,12 @@ class MidasMovie : MainAPI() {
     ): Boolean {
         val doc = app.get(data).document
         val sources = doc.select("li.dooplay_player_option")
+
         for (src in sources) {
             val post = src.attr("data-post")
             val nume = src.attr("data-nume")
             val type = src.attr("data-type")
+
             val ajaxResponse = app.post(
                 url = "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
@@ -102,11 +110,18 @@ class MidasMovie : MainAPI() {
                 referer = data,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
+
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            loadExtractor(fixUrl(iframeUrl), data, subtitleCallback) { link ->
-                callback(link)
+            loadExtractor(fixUrl(iframeUrl), dataUrl = data, subtitleCallback) { link ->
+                val qualities = listOf("1080p", "720p", "480p", "360p")
+                val bestLink = qualities.mapNotNull { q ->
+                    if (link.name.contains(q, ignoreCase = true)) link else null
+                }.firstOrNull() ?: link
+
+                callback(bestLink)
             }
         }
+
         return true
     }
 }
