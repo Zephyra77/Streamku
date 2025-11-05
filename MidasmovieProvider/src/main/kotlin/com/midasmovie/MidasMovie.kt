@@ -1,7 +1,6 @@
 package com.midasmovie
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.extractors.ExtractorHelper
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 
@@ -27,9 +26,10 @@ class MidasMovie : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
-        val posterUrl = selectFirst("img")?.attr("src")
+        val poster = selectFirst("img")?.attr("src")
         val qualityText = selectFirst(".mepo .quality")?.text()
-        val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
+        val type =
+            if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
         val quality = when {
             qualityText?.contains("1080", true) == true -> SearchQuality.P1080
@@ -38,7 +38,7 @@ class MidasMovie : MainAPI() {
         }
 
         return newMovieSearchResponse(title, href, type) {
-            this.posterUrl = posterUrl
+            this.posterUrl = poster
             this.quality = quality
         }
     }
@@ -57,7 +57,7 @@ class MidasMovie : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
-        val posterUrl = doc.selectFirst(".poster img")?.attr("src")
+        val poster = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
@@ -67,27 +67,27 @@ class MidasMovie : MainAPI() {
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
-            val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull() ?: 0
-
-            newEpisode(linkEp) {
-                name = nameEp
-                episode = epNum
+            val epNum =
+                ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull() ?: 0
+            Episode(
+                data = linkEp,
+                name = nameEp,
+                episode = epNum,
                 posterUrl = posterEp
-            }
+            )
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries) {
-                this.posterUrl = posterUrl
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                this.posterUrl = poster
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                this.episodes = episodes
                 this.actors = actors
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, dataUrl = url) {
-                this.posterUrl = posterUrl
+            newMovieLoadResponse(title, url, TvType.Movie) {
+                this.posterUrl = poster
                 this.year = year
                 this.plot = plot
                 this.tags = tags
@@ -123,7 +123,7 @@ class MidasMovie : MainAPI() {
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            ExtractorHelper.loadDefaultExtractor(fixUrl(iframeUrl), this.name, data, callback)
+            loadExtractor(fixUrl(iframeUrl), data, subtitleCallback, callback)
         }
 
         return true
