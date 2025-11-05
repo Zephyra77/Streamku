@@ -1,17 +1,23 @@
 package com.midasmovie
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
-import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.LoadResponse.Companion.newMovieLoadResponse
+import com.lagradost.cloudstream3.LoadResponse.Companion.newTvSeriesLoadResponse
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.addActors
+import com.lagradost.cloudstream3.utils.fixUrl
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jsoup.nodes.Element
 
 class MidasMovieProvider : MainAPI() {
-    override var name = "MidasMovie"
-    override var mainUrl = "https://midasmovie.live"
-    override var lang = "id"
+
+    override val name = "MidasMovie"
+    override val mainUrl = "https://midasmovie.live"
+    override val lang = "id"
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
     override val hasMainPage = true
     override val hasDownloadSupport = true
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
         "$mainUrl/" to "Terbaru",
@@ -27,17 +33,14 @@ class MidasMovieProvider : MainAPI() {
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
-        val poster = selectFirst("img")?.attr("src")
+        val posterUrl = selectFirst("img")?.attr("src")
         val quality = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
-        return newMovieSearchResponse(
-            title = title,
-            url = href,
-            type = type,
-            posterUrl = poster,
-            quality = getQualityFromString(quality)
-        )
+        return newMovieSearchResponse(title, href, type = type).apply {
+            this.posterUrl = posterUrl
+            this.quality = getQualityFromString(quality)
+        }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -53,8 +56,9 @@ class MidasMovieProvider : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
+
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
-        val poster = doc.selectFirst(".poster img")?.attr("src")
+        val posterUrl = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
@@ -65,46 +69,40 @@ class MidasMovieProvider : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(
-                name = nameEp,
-                url = linkEp,
-                episode = epNum,
-                posterUrl = posterEp
-            )
+            newEpisode(nameEp, linkEp, episode = epNum).apply {
+                this.posterUrl = posterEp
+            }
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(
-                title = title,
-                url = url,
-                type = TvType.TvSeries,
-                posterUrl = poster,
-                year = year,
-                description = plot,
-                tags = tags,
-                episodes = episodes
-            ).addActors(actors)
+            newTvSeriesLoadResponse(title = title, episodes = episodes)
+                .apply {
+                    this.posterUrl = posterUrl
+                    this.year = year
+                    this.plot = plot
+                    this.tags = tags
+                }
+                .addActors(actors)
         } else {
-            newMovieLoadResponse(
-                title = title,
-                url = url,
-                type = TvType.Movie,
-                posterUrl = poster,
-                year = year,
-                description = plot,
-                tags = tags
-            ).addActors(actors)
+            newMovieLoadResponse(title = title)
+                .apply {
+                    this.posterUrl = posterUrl
+                    this.year = year
+                    this.plot = plot
+                    this.tags = tags
+                }
+                .addActors(actors)
         }
     }
 
     override suspend fun loadLinks(
-        dataUrl: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val doc = app.get(dataUrl).document
+        url: String,
+        episode: Episode,
+        subtitleCallback: (SubtitleFile) -> Unit
+    ): List<ExtractorLink> {
+        val doc = app.get(url).document
         val sources = doc.select("li.dooplay_player_option")
+        val links = mutableListOf<ExtractorLink>()
 
         for (src in sources) {
             val post = src.attr("data-post")
@@ -119,19 +117,21 @@ class MidasMovieProvider : MainAPI() {
                     "nume" to nume,
                     "type" to type
                 ),
-                referer = dataUrl,
+                referer = url,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            loadExtractor(
-                url = fixUrl(iframeUrl),
-                dataUrl = dataUrl,
-                subtitleCallback = subtitleCallback
-            ) { link ->
-                callback(link)
-            }
+            links.add(
+                ExtractorLink(
+                    name = "Web",
+                    url = fixUrl(iframeUrl),
+                    isM3u8 = false,
+                    quality = "720p"
+                )
+            )
         }
-        return true
+
+        return links
     }
 }
