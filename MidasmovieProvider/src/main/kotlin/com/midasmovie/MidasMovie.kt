@@ -1,8 +1,8 @@
 package com.midasmovie
 
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.extractors.ExtractorHelper
 import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.utils.ExtractorHelper
 import org.jsoup.nodes.Element
 
 class MidasMovie : MainAPI() {
@@ -32,8 +32,8 @@ class MidasMovie : MainAPI() {
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
         val quality = when {
-            qualityText?.contains("1080", true) == true -> 1080
-            qualityText?.contains("720", true) == true -> 720
+            qualityText?.contains("1080", true) == true -> SearchQuality.P1080
+            qualityText?.contains("720", true) == true -> SearchQuality.P720
             else -> null
         }
 
@@ -61,7 +61,7 @@ class MidasMovie : MainAPI() {
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
-        val actors = doc.select(".person .data h3").map { ActorData(it.text()) }
+        val actors = doc.select(".person .data h3").map { Actor(it.text()) }
 
         val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
@@ -78,20 +78,20 @@ class MidasMovie : MainAPI() {
 
         return if (episodes.isNotEmpty()) {
             newTvSeriesLoadResponse(title, url, TvType.TvSeries) {
-                posterUrl = this@MidasMovie.posterUrl
-                year = this@MidasMovie.year
-                plot = this@MidasMovie.plot
-                tags = this@MidasMovie.tags
+                this.posterUrl = posterUrl
+                this.year = year
+                this.plot = plot
+                this.tags = tags
                 this.episodes = episodes
                 this.actors = actors
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, dataUrl = url) {
-                posterUrl = posterUrl
-                year = year
-                plot = plot
-                tags = tags
-                actors = actors
+                this.posterUrl = posterUrl
+                this.year = year
+                this.plot = plot
+                this.tags = tags
+                this.actors = actors
             }
         }
     }
