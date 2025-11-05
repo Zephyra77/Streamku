@@ -1,8 +1,8 @@
 package com.midasmovie
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.networking.get
-import com.lagradost.cloudstream3.networking.post
+import com.lagradost.cloudstream3.network.get
+import com.lagradost.cloudstream3.network.post
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.fixUrl
 import com.lagradost.cloudstream3.utils.getQualityFromString
@@ -35,7 +35,7 @@ class MidasMovie : MainAPI() {
         val qualityText = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
-        return searchResponseOf(
+        return newSearchResponse(
             name = title,
             url = href,
             type = type,
@@ -47,7 +47,7 @@ class MidasMovie : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val doc = get(request.data).document
         val items = doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
-        return homePageResponseOf(request.name, items)
+        return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -69,11 +69,16 @@ class MidasMovie : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull() ?: 0
-            episodeOf(name = nameEp, url = linkEp, episode = epNum, posterUrl = posterEp)
+            newEpisode(
+                name = nameEp,
+                url = linkEp,
+                episode = epNum,
+                posterUrl = posterEp
+            )
         }
 
         return if (episodes.isNotEmpty()) {
-            tvSeriesLoadResponseOf(
+            newTvSeriesLoadResponse(
                 name = title,
                 url = url,
                 type = TvType.TvSeries,
@@ -85,7 +90,7 @@ class MidasMovie : MainAPI() {
                 actors = actors
             )
         } else {
-            movieLoadResponseOf(
+            newMovieLoadResponse(
                 name = title,
                 url = url,
                 type = TvType.Movie,
@@ -125,7 +130,7 @@ class MidasMovie : MainAPI() {
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            extractorLoad(fixUrl(iframeUrl)) { link: ExtractorLink ->
+            loadExtractor(fixUrl(iframeUrl)) { link: ExtractorLink ->
                 callback(link)
             }
         }
