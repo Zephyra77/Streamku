@@ -2,6 +2,7 @@ package com.midasmovie
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.ExtractorHelper
 import org.jsoup.nodes.Element
 
 class MidasMovie : MainAPI() {
@@ -36,14 +37,10 @@ class MidasMovie : MainAPI() {
             else -> null
         }
 
-        return SearchResponse(
-            name = title,
-            url = href,
-            apiName = name,
-            type = type,
-            posterUrl = posterUrl,
-            quality = quality
-        )
+        return newMovieSearchResponse(title, href, type) {
+            this.posterUrl = posterUrl
+            this.quality = quality
+        }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -71,39 +68,31 @@ class MidasMovie : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull() ?: 0
-            Episode(
-                data = linkEp,
-                name = nameEp,
-                episode = epNum,
+
+            newEpisode(linkEp) {
+                name = nameEp
+                episode = epNum
                 posterUrl = posterEp
-            )
+            }
         }
 
         return if (episodes.isNotEmpty()) {
-            TvSeriesLoadResponse(
-                name = title,
-                url = url,
-                apiName = this.name,
-                type = TvType.TvSeries,
-                posterUrl = posterUrl,
-                year = year,
-                plot = plot,
-                tags = tags,
-                episodes = episodes,
-                actors = actors
-            )
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries) {
+                posterUrl = this@MidasMovie.posterUrl
+                year = this@MidasMovie.year
+                plot = this@MidasMovie.plot
+                tags = this@MidasMovie.tags
+                this.episodes = episodes
+                this.actors = actors
+            }
         } else {
-            MovieLoadResponse(
-                name = title,
-                url = url,
-                apiName = this.name,
-                type = TvType.Movie,
-                posterUrl = posterUrl,
-                year = year,
-                plot = plot,
-                tags = tags,
+            newMovieLoadResponse(title, url, TvType.Movie, dataUrl = url) {
+                posterUrl = posterUrl
+                year = year
+                plot = plot
+                tags = tags
                 actors = actors
-            )
+            }
         }
     }
 
