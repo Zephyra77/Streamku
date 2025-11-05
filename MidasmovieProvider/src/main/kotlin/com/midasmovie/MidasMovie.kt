@@ -3,7 +3,7 @@ package com.midasmovie
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.fixUrl
-import com.lagradost.cloudstream3.utils.qualFromString
+import com.lagradost.cloudstream3.utils.qualToInt
 import org.jsoup.nodes.Element
 
 class MidasMovie : MainAPI() {
@@ -37,8 +37,8 @@ class MidasMovie : MainAPI() {
             title,
             href,
             type,
-            posterUrl,
-            qualityText?.qualFromString() ?: 0
+            posterUrl = posterUrl,
+            quality = qualityText?.qualToInt() ?: 0
         )
     }
 
@@ -60,7 +60,7 @@ class MidasMovie : MainAPI() {
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
-        val actors = doc.select(".person .data h3").map { ActorData(name = it.text()) }
+        val actors = doc.select(".person .data h3").map { ActorData(it.text()) }
 
         val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
@@ -68,8 +68,8 @@ class MidasMovie : MainAPI() {
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull() ?: 0
             newEpisode(
-                name = nameEp,
-                url = linkEp,
+                nameEp,
+                linkEp,
                 episode = epNum,
                 posterUrl = posterEp
             )
@@ -77,28 +77,26 @@ class MidasMovie : MainAPI() {
 
         return if (episodes.isNotEmpty()) {
             newTvSeriesLoadResponse(
-                name = title,
-                url = url,
+                title,
+                url,
                 type = TvType.TvSeries,
                 posterUrl = posterUrl,
                 year = year,
                 plot = plot,
                 tags = tags,
                 episodes = episodes,
-                actors = actors,
-                dataUrl = url
+                actors = actors
             )
         } else {
             newMovieLoadResponse(
-                name = title,
-                url = url,
+                title,
+                url,
                 type = TvType.Movie,
                 posterUrl = posterUrl,
                 year = year,
                 plot = plot,
                 tags = tags,
-                actors = actors,
-                dataUrl = url
+                actors = actors
             )
         }
     }
@@ -130,7 +128,7 @@ class MidasMovie : MainAPI() {
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            extractorLoad(fixUrl(iframeUrl)) { link: ExtractorLink ->
+            loadExtractor(fixUrl(iframeUrl)) { link ->
                 callback(link)
             }
         }
