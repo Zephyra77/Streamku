@@ -11,7 +11,7 @@ class MidasMovie : MainAPI() {
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
         "$mainUrl/" to "Terbaru",
@@ -28,13 +28,15 @@ class MidasMovie : MainAPI() {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
         val poster = selectFirst("img")?.attr("src")
-        val qualityStr = selectFirst(".mepo .quality")?.text()
+        val quality = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
-
-        return newMovieSearchResponse(title, href, type).apply {
-            this.posterUrl = poster
-            this.quality = getQualityFromString(qualityStr)
-        }
+        return newMovieSearchResponse(
+            name = title,
+            url = href,
+            type = type,
+            posterUrl = poster,
+            quality = getQualityFromString(quality)
+        )
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -62,15 +64,22 @@ class MidasMovie : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(linkEp).apply {
-                name = nameEp
-                episode = epNum
+            newEpisode(
+                name = nameEp,
+                url = linkEp,
+                episode = epNum,
                 posterUrl = posterEp
-            }
+            )
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes).apply {
+            newTvSeriesLoadResponse(
+                name = title,
+                url = url,
+                type = TvType.TvSeries,
+                episodes = episodes,
+                dataUrl = url
+            ).apply {
                 this.posterUrl = poster
                 this.plot = plot
                 this.tags = tags
@@ -78,7 +87,12 @@ class MidasMovie : MainAPI() {
                 addActors(actors)
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie).apply {
+            newMovieLoadResponse(
+                name = title,
+                url = url,
+                type = TvType.Movie,
+                dataUrl = url
+            ).apply {
                 this.posterUrl = poster
                 this.plot = plot
                 this.tags = tags
@@ -96,12 +110,10 @@ class MidasMovie : MainAPI() {
     ): Boolean {
         val doc = app.get(data).document
         val sources = doc.select("li.dooplay_player_option")
-
         for (src in sources) {
             val post = src.attr("data-post")
             val nume = src.attr("data-nume")
             val type = src.attr("data-type")
-
             val ajaxResponse = app.post(
                 url = "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
@@ -113,13 +125,14 @@ class MidasMovie : MainAPI() {
                 referer = data,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
-
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            newExtractorLink(url = fixUrl(iframeUrl), name = "Video", referer = data).let {
-                callback(it)
-            }
+            newExtractorLink(
+                source = "MidasMovie",
+                name = "Video",
+                url = fixUrl(iframeUrl),
+                referer = data
+            ).let { callback(it) }
         }
-
         return true
     }
 }
