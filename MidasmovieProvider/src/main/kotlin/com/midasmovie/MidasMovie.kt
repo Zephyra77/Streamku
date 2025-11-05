@@ -11,7 +11,7 @@ class MidasMovie : MainAPI() {
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
         "$mainUrl/" to "Terbaru",
@@ -21,75 +21,57 @@ class MidasMovie : MainAPI() {
         "$mainUrl/genre/drama/" to "Drama",
         "$mainUrl/genre/horror/" to "Horror",
         "$mainUrl/genre/comedy/" to "Comedy",
-        "$mainUrl/genre/sci-fi-fantasy/" to "Sci-Fi & Fantasy",
-        "$mainUrl/tvshows/" to "TV Series",
-        "$mainUrl/movies/" to "Movie"
+        "$mainUrl/genre/sci-fi-fantasy/" to "Sci-Fi & Fantasy"
     )
 
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
-        val posterUrl = selectFirst("img")?.attr("src")
+        val poster = selectFirst("img")?.attr("src")
         val quality = selectFirst(".mepo .quality")?.text()
-        val type = when {
-            href.contains("/tvshows/") || href.contains("/episodes/") -> TvType.TvSeries
-            href.contains("/animation/") -> TvType.Anime
-            else -> TvType.Movie
-        }
-
+        val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
         return newMovieSearchResponse(title, href, type = type).apply {
-            posterUrl?.let { poster = it }
+            posterUrl = poster
             this.quality = getQualityFromString(quality)
         }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val doc = app.get(request.data).document
-        val items = mutableListOf<SearchResponse>()
-
-        doc.select("article.item.movies, article.item.tvshows, article.item.anime").forEach {
-            it.toSearchResult()?.let { sr -> items.add(sr) }
-        }
-
+        val items = doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val doc = app.get("$mainUrl/?s=$query").document
-        return doc.select("article.item.movies, article.item.tvshows, article.item.anime")
-            .mapNotNull { it.toSearchResult() }
+        return doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
-        val posterUrl = doc.selectFirst(".poster img")?.attr("src")
+        val poster = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
         val actors = doc.select(".person .data h3").map { it.text() }
-
         val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(nameEp, linkEp, episode = epNum).apply {
-                poster = posterEp
-            }
+            newEpisode(nameEp, linkEp, episode = epNum).apply { posterUrl = posterEp }
         }
-
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, type = TvType.TvSeries).apply {
-                poster = posterUrl
+            newTvSeriesLoadResponse(title, url, type = TvType.TvSeries, episodes = episodes).apply {
+                posterUrl = poster
                 this.year = year
                 description = plot
                 this.tags = tags
-                this.episodes = episodes
             }.addActors(actors)
         } else {
             newMovieLoadResponse(title, url, type = TvType.Movie).apply {
-                poster = posterUrl
+                posterUrl = poster
                 this.year = year
                 description = plot
                 this.tags = tags
@@ -105,12 +87,10 @@ class MidasMovie : MainAPI() {
     ): Boolean {
         val doc = app.get(data).document
         val sources = doc.select("li.dooplay_player_option")
-
         for (src in sources) {
             val post = src.attr("data-post")
             val nume = src.attr("data-nume")
             val type = src.attr("data-type")
-
             val ajaxResponse = app.post(
                 url = "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
@@ -122,21 +102,11 @@ class MidasMovie : MainAPI() {
                 referer = data,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
-
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            loadExtractor(fixUrl(iframeUrl), data, subtitleCallback) { url, name, quality, isM3u8 ->
-                callback(
-                    newExtractorLink(
-                        name = name,
-                        url = url,
-                        referer = data,
-                        isM3u8 = isM3u8,
-                        source = null
-                    )
-                )
+            loadExtractor(fixUrl(iframeUrl), data, subtitleCallback) { link ->
+                callback(link)
             }
         }
-
         return true
     }
 }
