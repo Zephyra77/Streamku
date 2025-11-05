@@ -10,8 +10,8 @@ import org.jsoup.nodes.Element
 
 class MidasMovie : MainAPI() {
 
-    override var name = "MidasMovie"
     override var mainUrl = "https://midasmovie.live"
+    override var name = "MidasMovie"
     override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
@@ -32,7 +32,7 @@ class MidasMovie : MainAPI() {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
         val posterUrl = selectFirst("img")?.attr("src")
-        val quality = selectFirst(".mepo .quality")?.text()
+        val qualityText = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
         return newSearchResponse(
@@ -40,23 +40,23 @@ class MidasMovie : MainAPI() {
             url = href,
             type = type,
             posterUrl = posterUrl,
-            quality = quality?.let { getQualityFromString(it) } ?: 0
+            quality = qualityText?.let { getQualityFromString(it) } ?: 0
         )
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val doc = app.get(request.data).document
+        val doc = get(request.data).document
         val items = doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val doc = app.get("$mainUrl/?s=$query").document
+        val doc = get("$mainUrl/?s=$query").document
         return doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val doc = app.get(url).document
+        val doc = get(url).document
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
         val posterUrl = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
@@ -109,19 +109,19 @@ class MidasMovie : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data).document
+        val doc = get(data).document
         val sources = doc.select("li.dooplay_player_option")
 
         for (src in sources) {
-            val post = src.attr("data-post")
+            val postId = src.attr("data-post")
             val nume = src.attr("data-nume")
             val type = src.attr("data-type")
 
-            val ajaxResponse = app.post(
+            val ajaxResponse = post(
                 url = "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
                     "action" to "doo_player_ajax",
-                    "post" to post,
+                    "post" to postId,
                     "nume" to nume,
                     "type" to type
                 ),
