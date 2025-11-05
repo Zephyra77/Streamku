@@ -31,11 +31,7 @@ class MidasMovie : MainAPI() {
         val type =
             if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
-        val quality = when {
-            qualityText?.contains("1080", true) == true -> SearchQuality.P1080
-            qualityText?.contains("720", true) == true -> SearchQuality.P720
-            else -> null
-        }
+        val quality = getQualityFromString(qualityText)
 
         return newMovieSearchResponse(title, href, type) {
             this.posterUrl = poster
@@ -61,20 +57,19 @@ class MidasMovie : MainAPI() {
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
-        val actors = doc.select(".person .data h3").map { Actor(it.text()) }
+        val actors = doc.select(".person .data h3").map { ActorData(it.text()) }
 
         val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
-            val epNum =
-                ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull() ?: 0
-            Episode(
-                data = linkEp,
-                name = nameEp,
-                episode = epNum,
+            val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
+
+            newEpisode(linkEp) {
+                name = nameEp
+                episode = epNum
                 posterUrl = posterEp
-            )
+            }
         }
 
         return if (episodes.isNotEmpty()) {
