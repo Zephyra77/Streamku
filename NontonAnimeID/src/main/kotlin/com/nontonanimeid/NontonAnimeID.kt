@@ -15,7 +15,6 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
 import java.util.Base64
-import java.util.Locale
 
 class NontonAnimeID : MainAPI() {
     override var mainUrl = "https://kotakanimeid.link"
@@ -52,7 +51,7 @@ class NontonAnimeID : MainAPI() {
     override val mainPage = mainPageOf(
         "" to "Latest Update",
         "ongoing-list/" to "Ongoing List",
-        "popular-series/" to "Popular Series",
+        "popular-series/" to "Popular Series"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -159,7 +158,7 @@ class NontonAnimeID : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.score = rating?.let { Score.fromDouble(it) }
+            this.score = rating?.let { Score(it.toFloat()) }
             plot = description
             addTrailer(trailer)
             this.tags = tags
@@ -193,7 +192,7 @@ class NontonAnimeID : MainAPI() {
                         "nonce" to (nonce ?: ""),
                         "serverName" to serverName,
                         "nume" to dataNume,
-                        "post" to dataPost,
+                        "post" to dataPost
                     ),
                     referer = data,
                     headers = mapOf("X-Requested-With" to "XMLHttpRequest")
