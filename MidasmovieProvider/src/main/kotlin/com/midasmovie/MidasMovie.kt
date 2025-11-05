@@ -1,23 +1,19 @@
 package com.midasmovie
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.LoadResponse.Companion.newMovieLoadResponse
-import com.lagradost.cloudstream3.LoadResponse.Companion.newTvSeriesLoadResponse
+import com.lagradost.cloudstream3.network.get
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.addActors
 import com.lagradost.cloudstream3.utils.fixUrl
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.jsoup.nodes.Element
 
-class MidasMovieProvider : MainAPI() {
+class MidasMovie : MainAPI() {
 
-    override val name = "MidasMovie"
-    override val mainUrl = "https://midasmovie.live"
-    override val lang = "id"
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
+    override var name = "MidasMovie"
+    override var mainUrl = "https://midasmovie.live"
+    override var lang = "id"
     override val hasMainPage = true
     override val hasDownloadSupport = true
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
     override val mainPage = mainPageOf(
         "$mainUrl/" to "Terbaru",
@@ -37,10 +33,13 @@ class MidasMovieProvider : MainAPI() {
         val quality = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
-        return newMovieSearchResponse(title, href, type = type).apply {
-            this.posterUrl = posterUrl
-            this.quality = getQualityFromString(quality)
-        }
+        return SearchResponse(
+            name = title,
+            url = href,
+            type = type,
+            posterUrl = posterUrl,
+            quality = quality?.let { getQualityFromString(it) } ?: 0
+        )
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -56,7 +55,6 @@ class MidasMovieProvider : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
         val posterUrl = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
@@ -69,40 +67,45 @@ class MidasMovieProvider : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(nameEp, linkEp, episode = epNum).apply {
+            Episode(name = nameEp, url = linkEp, episode = epNum ?: 0).apply {
                 this.posterUrl = posterEp
             }
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title = title, episodes = episodes)
-                .apply {
-                    this.posterUrl = posterUrl
-                    this.year = year
-                    this.plot = plot
-                    this.tags = tags
-                }
-                .addActors(actors)
+            TvSeriesLoadResponse(
+                name = title,
+                url = url,
+                type = TvType.TvSeries,
+                posterUrl = posterUrl,
+                year = year,
+                plot = plot,
+                tags = tags,
+                episodes = episodes,
+                actors = actors
+            )
         } else {
-            newMovieLoadResponse(title = title)
-                .apply {
-                    this.posterUrl = posterUrl
-                    this.year = year
-                    this.plot = plot
-                    this.tags = tags
-                }
-                .addActors(actors)
+            MovieLoadResponse(
+                name = title,
+                url = url,
+                type = TvType.Movie,
+                posterUrl = posterUrl,
+                year = year,
+                plot = plot,
+                tags = tags,
+                actors = actors
+            )
         }
     }
 
     override suspend fun loadLinks(
-        url: String,
-        episode: Episode,
-        subtitleCallback: (SubtitleFile) -> Unit
-    ): List<ExtractorLink> {
-        val doc = app.get(url).document
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val doc = app.get(data).document
         val sources = doc.select("li.dooplay_player_option")
-        val links = mutableListOf<ExtractorLink>()
 
         for (src in sources) {
             val post = src.attr("data-post")
@@ -117,21 +120,16 @@ class MidasMovieProvider : MainAPI() {
                     "nume" to nume,
                     "type" to type
                 ),
-                referer = url,
+                referer = data,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            links.add(
-                ExtractorLink(
-                    name = "Web",
-                    url = fixUrl(iframeUrl),
-                    isM3u8 = false,
-                    quality = "720p"
-                )
-            )
+            loadExtractor(fixUrl(iframeUrl)) { link ->
+                callback(link)
+            }
         }
 
-        return links
+        return true
     }
 }
