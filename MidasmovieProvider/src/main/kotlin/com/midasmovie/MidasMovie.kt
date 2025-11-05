@@ -1,8 +1,6 @@
 package com.midasmovie
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.network.get
-import com.lagradost.cloudstream3.network.post
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.fixUrl
 import com.lagradost.cloudstream3.utils.getQualityFromString
@@ -45,18 +43,18 @@ class MidasMovie : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val doc = get(request.data).document
+        val doc = app.get(request.data).document
         val items = doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val doc = get("$mainUrl/?s=$query").document
+        val doc = app.get("$mainUrl/?s=$query").document
         return doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val doc = get(url).document
+        val doc = app.get(url).document
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
         val posterUrl = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
@@ -109,7 +107,7 @@ class MidasMovie : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = get(data).document
+        val doc = app.get(data).document
         val sources = doc.select("li.dooplay_player_option")
 
         for (src in sources) {
@@ -117,7 +115,7 @@ class MidasMovie : MainAPI() {
             val nume = src.attr("data-nume")
             val type = src.attr("data-type")
 
-            val ajaxResponse = post(
+            val ajaxResponse = app.post(
                 url = "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
                     "action" to "doo_player_ajax",
