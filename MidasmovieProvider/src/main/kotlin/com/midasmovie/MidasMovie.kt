@@ -30,13 +30,11 @@ class MidasMovie : MainAPI() {
         val poster = selectFirst("img")?.attr("src")
         val quality = selectFirst(".mepo .quality")?.text()
         val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
-        return newMovieSearchResponse(
-            name = title,
-            url = href,
-            type = type,
-            posterUrl = poster,
-            quality = getQualityFromString(quality)
-        )
+
+        return newMovieSearchResponse(title, href, type = type).apply {
+            poster = poster
+            this.quality = getQualityFromString(quality)
+        }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -64,41 +62,26 @@ class MidasMovie : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-            newEpisode(
-                name = nameEp,
-                url = linkEp,
-                episode = epNum,
-                posterUrl = posterEp
-            )
+            newEpisode(nameEp, linkEp, episode = epNum).apply {
+                poster = posterEp
+            }
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(
-                name = title,
-                url = url,
-                type = TvType.TvSeries,
-                episodes = episodes,
-                dataUrl = url
-            ).apply {
-                this.posterUrl = poster
-                this.plot = plot
-                this.tags = tags
+            newTvSeriesLoadResponse(title, url, type = TvType.TvSeries).apply {
+                this.poster = poster
                 this.year = year
-                addActors(actors)
-            }
+                description = plot
+                this.tags = tags
+                this.episodes = episodes
+            }.addActors(actors)
         } else {
-            newMovieLoadResponse(
-                name = title,
-                url = url,
-                type = TvType.Movie,
-                dataUrl = url
-            ).apply {
-                this.posterUrl = poster
-                this.plot = plot
-                this.tags = tags
+            newMovieLoadResponse(title, url, type = TvType.Movie).apply {
+                this.poster = poster
                 this.year = year
-                addActors(actors)
-            }
+                description = plot
+                this.tags = tags
+            }.addActors(actors)
         }
     }
 
@@ -110,10 +93,12 @@ class MidasMovie : MainAPI() {
     ): Boolean {
         val doc = app.get(data).document
         val sources = doc.select("li.dooplay_player_option")
+
         for (src in sources) {
             val post = src.attr("data-post")
             val nume = src.attr("data-nume")
             val type = src.attr("data-type")
+
             val ajaxResponse = app.post(
                 url = "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
@@ -125,14 +110,13 @@ class MidasMovie : MainAPI() {
                 referer = data,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
+
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            newExtractorLink(
-                source = "MidasMovie",
-                name = "Video",
-                url = fixUrl(iframeUrl),
-                referer = data
-            ).let { callback(it) }
+            loadExtractor(fixUrl(iframeUrl), data, subtitleCallback) { url, name, quality, isM3u8 ->
+                callback(newExtractorLink(name = name, url = url, referer = data, isM3u8 = isM3u8))
+            }
         }
+
         return true
     }
 }
