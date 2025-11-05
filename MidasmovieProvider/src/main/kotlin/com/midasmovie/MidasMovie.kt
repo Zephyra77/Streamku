@@ -72,14 +72,14 @@ class MidasMovie : MainAPI() {
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            newTvSeriesLoadResponse(title, url, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
                 this.tags = tags
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie) {
+            newMovieLoadResponse(title, url, url, TvType.Movie) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
