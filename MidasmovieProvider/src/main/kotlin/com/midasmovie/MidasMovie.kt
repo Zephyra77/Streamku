@@ -3,6 +3,7 @@ package com.midasmovie
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.fixUrl
+import com.lagradost.cloudstream3.utils.qualToInt
 import org.jsoup.nodes.Element
 
 class MidasMovie : MainAPI() {
@@ -59,14 +60,13 @@ class MidasMovie : MainAPI() {
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
-        val actors = doc.select(".person .data h3").map { Actor(it.text()) }
+        val actors = doc.select(".person .data h3").map { ActorData(name = it.text()) }
 
         val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull() ?: 0
-
             newEpisode(
                 name = nameEp,
                 url = linkEp,
@@ -128,20 +128,11 @@ class MidasMovie : MainAPI() {
             ).document
 
             val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            loadExtractor(fixUrl(iframeUrl)) { link ->
+            loadExtractor(fixUrl(iframeUrl)) { link: ExtractorLink ->
                 callback(link)
             }
         }
 
         return true
-    }
-
-    private fun String.qualToInt(): Int {
-        return when (this.lowercase()) {
-            "hd" -> 720
-            "fhd" -> 1080
-            "sd" -> 480
-            else -> 0
-        }
     }
 }
