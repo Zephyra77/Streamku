@@ -57,7 +57,7 @@ class MidasMovie : MainAPI() {
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
-        val actors = doc.select(".person .data h3").map { ActorData(it.text()) }
+        val actors = doc.select(".person .data h3").map { Actor(it.text()) }
 
         val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
             val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
@@ -73,7 +73,7 @@ class MidasMovie : MainAPI() {
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes, dataUrl = url) {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
@@ -81,7 +81,7 @@ class MidasMovie : MainAPI() {
                 this.actors = actors
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, dataUrl = url) {
+            newMovieLoadResponse(title, url, TvType.Movie) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
