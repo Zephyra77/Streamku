@@ -51,9 +51,7 @@ class NontonAnimeIDProvider : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val document = app.get("$mainUrl/${request.data}").document
-        val home = document.select(".animeseries").mapNotNull {
-            it.toSearchResult()
-        }
+        val home = document.select(".animeseries").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, home, hasNext = false)
     }
 
@@ -66,7 +64,6 @@ class NontonAnimeIDProvider : MainAPI() {
             this.posterUrl = posterUrl
             addDubStatus(dubExist = false, subExist = true)
         }
-
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -107,11 +104,9 @@ class NontonAnimeIDProvider : MainAPI() {
         val year = Regex("\\d, (\\d*)").find(
             document.select(".bottomtitle > span:nth-child(5)").text()
         )?.groupValues?.get(1)?.toIntOrNull()
-        val status = getStatus(
-            document.select("span.statusseries").text().trim()
-        )
+        val status = getStatus(document.select("span.statusseries").text().trim())
         val type = getType(document.select("span.typeseries").text().trim().lowercase())
-        val rating = document.select("span.nilaiseries").text().trim().toIntOrNull()
+        val score = document.select("span.nilaiseries").text().trim().toIntOrNull()
         val description = document.select(".entry-content.seriesdesc > p").text().trim()
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
@@ -166,7 +161,7 @@ class NontonAnimeIDProvider : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.rating = rating
+            this.score = score
             plot = description
             addTrailer(trailer)
             this.tags = tags
@@ -190,7 +185,7 @@ class NontonAnimeIDProvider : MainAPI() {
             document.select("script#ajax_video-js-extra").attr("src").substringAfter("base64,")
                 .let { Regex("nonce\":\"(\\S+?)\"").find(base64Decode(it))?.groupValues?.get(1) }
 
-        document.select(".container1 > ul > li:not(.boxtab)").apmap {
+        document.select(".container1 > ul > li:not(.boxtab)").forEach { it ->
             val dataPost = it.attr("data-post")
             val dataNume = it.attr("data-nume")
             val serverName = it.attr("data-type").lowercase()
@@ -211,7 +206,7 @@ class NontonAnimeIDProvider : MainAPI() {
                     .attr("data-src") else it
             }
 
-            loadExtractor(iframe ?: return@apmap, "$mainUrl/", subtitleCallback, callback)
+            loadExtractor(iframe ?: return@forEach, "$mainUrl/", subtitleCallback, callback)
         }
 
         return true
@@ -238,5 +233,4 @@ class NontonAnimeIDProvider : MainAPI() {
         @JsonProperty("found_posts") val found_posts: Int?,
         @JsonProperty("content") val content: String
     )
-
 }
