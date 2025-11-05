@@ -106,7 +106,12 @@ class NontonAnimeIDProvider : MainAPI() {
         )?.groupValues?.get(1)?.toIntOrNull()
         val status = getStatus(document.select("span.statusseries").text().trim())
         val type = getType(document.select("span.typeseries").text().trim().lowercase())
-        val score = document.select("span.nilaiseries").text().trim().toIntOrNull()
+
+        // Score nullable
+        val scoreInt = document.select("span.nilaiseries").text().trim().toIntOrNull()
+        val score: com.lagradost.cloudstream3.Score? =
+            scoreInt?.let { com.lagradost.cloudstream3.Score(it.toFloat() / 10f) }
+
         val description = document.select(".entry-content.seriesdesc > p").text().trim()
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
@@ -161,7 +166,7 @@ class NontonAnimeIDProvider : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.score = score
+            this.score = score // nullable Score?
             plot = description
             addTrailer(trailer)
             this.tags = tags
@@ -169,7 +174,6 @@ class NontonAnimeIDProvider : MainAPI() {
             addMalId(tracker?.malId)
             addAniListId(tracker?.aniId?.toIntOrNull())
         }
-
     }
 
     override suspend fun loadLinks(
