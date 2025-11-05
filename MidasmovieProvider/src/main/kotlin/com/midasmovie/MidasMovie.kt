@@ -53,7 +53,6 @@ class MidasMovie : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-
         val title = doc.selectFirst("h1")?.text()?.trim() ?: "No title"
         val poster = doc.selectFirst(".poster img")?.attr("src")
         val year = doc.selectFirst(".date")?.text()?.takeLast(4)?.toIntOrNull()
@@ -66,7 +65,6 @@ class MidasMovie : MainAPI() {
             val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
             val posterEp = ep.selectFirst("img")?.attr("src")
             val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
-
             newEpisode(
                 name = nameEp,
                 url = linkEp,
@@ -80,11 +78,11 @@ class MidasMovie : MainAPI() {
                 name = title,
                 url = url,
                 type = TvType.TvSeries,
-                episodes = episodes,
                 posterUrl = poster,
                 year = year,
                 plot = plot,
-                tags = tags
+                tags = tags,
+                episodes = episodes
             ).addActors(actors)
         } else {
             newMovieLoadResponse(
