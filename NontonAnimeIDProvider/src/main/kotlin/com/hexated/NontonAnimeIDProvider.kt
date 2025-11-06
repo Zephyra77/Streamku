@@ -7,6 +7,9 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addMalId
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
@@ -61,26 +64,20 @@ class NontonAnimeIDProvider : MainAPI() {
         val href = fixUrl(this.selectFirst("a")!!.attr("href"))
         val title = this.selectFirst(".title")?.text() ?: ""
         val posterUrl = fixUrlNull(this.selectFirst("img")?.getImageAttr())
-
         return newAnimeSearchResponse(title, href, TvType.Anime) {
             this.posterUrl = posterUrl
             addDubStatus(dubExist = false, subExist = true)
         }
-
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val link = "$mainUrl/?s=$query"
         val document = app.get(link).document
-
         return document.select(".result > ul > li").mapNotNull {
             val title = it.selectFirst("h2")!!.text().trim()
             val poster = it.selectFirst("img")?.getImageAttr()
-            val tvType = getType(
-                it.selectFirst(".boxinfores > span.typeseries")!!.text().toString()
-            )
+            val tvType = getType(it.selectFirst(".boxinfores > span.typeseries")!!.text().toString())
             val href = fixUrl(it.selectFirst("a")!!.attr("href"))
-
             newAnimeSearchResponse(title, href, tvType) {
                 this.posterUrl = poster
                 addDubStatus(dubExist = false, subExist = true)
@@ -89,64 +86,34 @@ class NontonAnimeIDProvider : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
-        val fixUrl = if (url.contains("/anime/")) {
-            url
-        } else {
-            app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
-        }
-
+        val fixUrl = if (url.contains("/anime/")) url else app.get(url).document.selectFirst("div.nvs.nvsc a")?.attr("href")
         val req = app.get(fixUrl ?: return null)
         mainUrl = getBaseUrl(req.url)
         val document = req.document
-
-        val title = document.selectFirst("h1.entry-title.cs")!!.text()
-            .removeSurrounding("Nonton Anime", "Sub Indo").trim()
+        val title = document.selectFirst("h1.entry-title.cs")!!.text().removeSurrounding("Nonton Anime", "Sub Indo").trim()
         val poster = document.selectFirst(".poster > img")?.getImageAttr()
         val tags = document.select(".tagline > a").map { it.text() }
-
-        val year = Regex("\\d, (\\d*)").find(
-            document.select(".bottomtitle > span:nth-child(5)").text()
-        )?.groupValues?.get(1)?.toIntOrNull()
-        val status = getStatus(
-            document.select("span.statusseries").text().trim()
-        )
+        val year = Regex("\\d, (\\d*)").find(document.select(".bottomtitle > span:nth-child(5)").text())?.groupValues?.get(1)?.toIntOrNull()
+        val status = getStatus(document.select("span.statusseries").text().trim())
         val type = getType(document.select("span.typeseries").text().trim().lowercase())
-        val rating = document.select("span.nilaiseries").text().trim().toIntOrNull()
+        val score = document.select("span.nilaiseries").text().trim().toFloatOrNull()
         val description = document.select(".entry-content.seriesdesc > p").text().trim()
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
-
         val episodes = if (document.select("button.buttfilter").isNotEmpty()) {
             val id = document.select("input[name=series_id]").attr("value")
-            val numEp =
-                document.selectFirst(".latestepisode > a")?.text()?.replace(Regex("\\D"), "")
-                    .toString()
-            Jsoup.parse(
-                app.post(
-                    url = "$mainUrl/wp-admin/admin-ajax.php",
-                    data = mapOf(
-                        "misha_number_of_results" to numEp,
-                        "misha_order_by" to "date-DESC",
-                        "action" to "mishafilter",
-                        "series_id" to id
-                    )
-                ).parsed<EpResponse>().content
-            ).select("li").map {
-                val episode = Regex("Episode\\s?(\\d+)").find(
-                    it.selectFirst("a")?.text().toString()
-                )?.groupValues?.getOrNull(0) ?: it.selectFirst("a")?.text()
+            val numEp = document.selectFirst(".latestepisode > a")?.text()?.replace(Regex("\\D"), "").toString()
+            Jsoup.parse(app.post(url = "$mainUrl/wp-admin/admin-ajax.php", data = mapOf("misha_number_of_results" to numEp,"misha_order_by" to "date-DESC","action" to "mishafilter","series_id" to id)).parsed<EpResponse>().content).select("li").map {
+                val episode = Regex("Episode\\s?(\\d+)").find(it.selectFirst("a")?.text().toString())?.groupValues?.getOrNull(0) ?: it.selectFirst("a")?.text()
                 val link = fixUrl(it.selectFirst("a")!!.attr("href"))
                 newEpisode(link) { this.episode = episode?.toIntOrNull() }
             }.reversed()
         } else {
             document.select("ul.misha_posts_wrap2 > li").map {
-                val episode = Regex("Episode\\s?(\\d+)").find(
-                    it.selectFirst("a")?.text().toString()
-                )?.groupValues?.getOrNull(0) ?: it.selectFirst("a")?.text()
+                val episode = Regex("Episode\\s?(\\d+)").find(it.selectFirst("a")?.text().toString())?.groupValues?.getOrNull(0) ?: it.selectFirst("a")?.text()
                 val link = it.select("a").attr("href")
                 newEpisode(link) { this.episode = episode?.toIntOrNull() }
             }.reversed()
         }
-
         val recommendations = document.select(".result > li").mapNotNull {
             val epHref = it.selectFirst("a")!!.attr("href")
             val epTitle = it.selectFirst("h3")!!.text()
@@ -156,9 +123,7 @@ class NontonAnimeIDProvider : MainAPI() {
                 addDubStatus(dubExist = false, subExist = true)
             }
         }
-
         val tracker = APIHolder.getTracker(listOf(title), TrackerType.getTypes(type), year, true)
-
         return newAnimeLoadResponse(title, url, type) {
             engName = title
             posterUrl = tracker?.image ?: poster
@@ -166,7 +131,7 @@ class NontonAnimeIDProvider : MainAPI() {
             this.year = year
             addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
-            this.rating = rating
+            this.score = score
             plot = description
             addTrailer(trailer)
             this.tags = tags
@@ -174,53 +139,27 @@ class NontonAnimeIDProvider : MainAPI() {
             addMalId(tracker?.malId)
             addAniListId(tracker?.aniId?.toIntOrNull())
         }
-
     }
 
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-
+    override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean = coroutineScope {
         val document = app.get(data).document
-
-        val nonce =
-            document.select("script#ajax_video-js-extra").attr("src").substringAfter("base64,")
-                .let { Regex("nonce\":\"(\\S+?)\"").find(base64Decode(it))?.groupValues?.get(1) }
-
-        document.select(".container1 > ul > li:not(.boxtab)").apmap {
-            val dataPost = it.attr("data-post")
-            val dataNume = it.attr("data-nume")
-            val serverName = it.attr("data-type").lowercase()
-
-            val iframe = app.post(
-                url = "$mainUrl/wp-admin/admin-ajax.php",
-                data = mapOf(
-                    "action" to "player_ajax",
-                    "nonce" to "$nonce",
-                    "serverName" to serverName,
-                    "nume" to dataNume,
-                    "post" to dataPost,
-                ),
-                referer = data,
-                headers = mapOf("X-Requested-With" to "XMLHttpRequest")
-            ).document.selectFirst("iframe")?.attr("src")?.let {
-                if (it.contains("/video-frame/")) app.get(it).document.select("iframe")
-                    .attr("data-src") else it
+        val nonce = document.select("script#ajax_video-js-extra").attr("src").substringAfter("base64,").let { Regex("nonce\":\"(\\S+?)\"").find(base64Decode(it))?.groupValues?.get(1) }
+        document.select(".container1 > ul > li:not(.boxtab)").map { element ->
+            async {
+                val dataPost = element.attr("data-post")
+                val dataNume = element.attr("data-nume")
+                val serverName = element.attr("data-type").lowercase()
+                val iframe = app.post(url = "$mainUrl/wp-admin/admin-ajax.php", data = mapOf("action" to "player_ajax","nonce" to "$nonce","serverName" to serverName,"nume" to dataNume,"post" to dataPost), referer = data, headers = mapOf("X-Requested-With" to "XMLHttpRequest")).document.selectFirst("iframe")?.attr("src")?.let {
+                    if (it.contains("/video-frame/")) app.get(it).document.select("iframe").attr("data-src") else it
+                }
+                loadExtractor(iframe ?: return@async, "$mainUrl/", subtitleCallback, callback)
             }
-
-            loadExtractor(iframe ?: return@apmap, "$mainUrl/", subtitleCallback, callback)
-        }
-
-        return true
+        }.awaitAll()
+        true
     }
 
     private fun getBaseUrl(url: String): String {
-        return URI(url).let {
-            "${it.scheme}://${it.host}"
-        }
+        return URI(url).let { "${it.scheme}://${it.host}" }
     }
 
     private fun Element.getImageAttr(): String? {
@@ -238,5 +177,4 @@ class NontonAnimeIDProvider : MainAPI() {
         @JsonProperty("found_posts") val found_posts: Int?,
         @JsonProperty("content") val content: String
     )
-
 }
