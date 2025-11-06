@@ -25,12 +25,12 @@ class MidasMovie : MainAPI() {
 
     private fun Element.toSearchResult(): SearchResponse? {
         val title = selectFirst("h3 a")?.text()?.trim() ?: return null
-        val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
+        val href = fixUrl(selectFirst("a[href]")!!.attr("href"))
         val poster = selectFirst("img")?.attr("src")
-        val qualityText = selectFirst(".mepo .quality")?.text()
-        val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
+        val quality = getQualityFromString(selectFirst(".mepo .quality")?.text())
 
-        val quality = getQualityFromString(qualityText)
+        val type = if (href.contains("/tvshows/") || href.contains("/episodes/"))
+            TvType.TvSeries else TvType.Movie
 
         return newMovieSearchResponse(title, href, type) {
             this.posterUrl = poster
@@ -40,8 +40,8 @@ class MidasMovie : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val doc = app.get(request.data).document
-        val items = doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
-        return newHomePageResponse(request.name, items)
+        val list = doc.select("#dt-movies article.item.movies").mapNotNull { it.toSearchResult() }
+        return newHomePageResponse(request.name, list)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -57,28 +57,28 @@ class MidasMovie : MainAPI() {
         val plot = doc.selectFirst("div[itemprop=description], .wp-content p")?.text()
         val tags = doc.select(".sgeneros a").map { it.text() }
 
-        val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull { ep ->
-            val nameEp = ep.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
-            val linkEp = fixUrl(ep.selectFirst(".episodiotitle a")?.attr("href") ?: return@mapNotNull null)
-            val posterEp = ep.selectFirst("img")?.attr("src")
-            val epNum = ep.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
+        val episodes = doc.select("#seasons .se-a ul.episodios li").mapNotNull {
+            val name = it.selectFirst(".episodiotitle a")?.text()?.trim() ?: return@mapNotNull null
+            val link = fixUrl(it.selectFirst(".episodiotitle a")!!.attr("href"))
+            val posterEp = it.selectFirst("img")?.attr("src")
+            val epNum = it.selectFirst(".numerando")?.text()?.substringAfter("-")?.trim()?.toIntOrNull()
 
-            newEpisode(linkEp) {
-                name = nameEp
-                episode = epNum
-                posterUrl = posterEp
+            newEpisode(link) {
+                this.name = name
+                this.posterUrl = posterEp
+                this.episode = epNum
             }
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            newTvSeriesLoadResponse(title, url, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
                 this.tags = tags
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie) {
+            newMovieLoadResponse(title, url, url, TvType.Movie) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
@@ -93,19 +93,20 @@ class MidasMovie : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+
         val doc = app.get(data).document
-        val sources = doc.select("li.dooplay_player_option")
+        val items = doc.select("li.dooplay_player_option")
 
-        for (src in sources) {
-            val postId = src.attr("data-post")
-            val nume = src.attr("data-nume")
-            val type = src.attr("data-type")
+        for (it in items) {
+            val post = it.attr("data-post")
+            val nume = it.attr("data-nume")
+            val type = it.attr("data-type")
 
-            val ajaxResponse = app.post(
-                url = "$mainUrl/wp-admin/admin-ajax.php",
+            val ajax = app.post(
+                "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
                     "action" to "doo_player_ajax",
-                    "post" to postId,
+                    "post" to post,
                     "nume" to nume,
                     "type" to type
                 ),
@@ -113,8 +114,8 @@ class MidasMovie : MainAPI() {
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
 
-            val iframeUrl = ajaxResponse.selectFirst("iframe")?.attr("src") ?: continue
-            loadExtractor(fixUrl(iframeUrl), data, subtitleCallback, callback)
+            val iframe = ajax.selectFirst("iframe")?.attr("src") ?: continue
+            loadExtractor(fixUrl(iframe), data, subtitleCallback, callback)
         }
 
         return true
