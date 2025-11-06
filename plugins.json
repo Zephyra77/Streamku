@@ -148,6 +148,27 @@
         "name": "Kawanfilm"
     },
     {
+        "iconUrl": "https://www.google.com/s2/favicons?domain=179.43.163.54&sz=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 16048,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "Anime",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 10,
+        "internalName": "Kitanonton",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Kitanonton.cs3",
+        "name": "Kitanonton"
+    },
+    {
         "iconUrl": "https://www.klikxxi.com/favicon.ico",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Zephyra77/Streamku",
