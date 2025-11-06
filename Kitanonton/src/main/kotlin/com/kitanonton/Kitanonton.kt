@@ -1,4 +1,4 @@
-package com.kitanonton
+package com.hexated
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
@@ -8,10 +8,13 @@ import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.safeApiCall
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Element
 import java.net.URI
 
-open class Kitanonton : MainAPI() {
+open class KitaNontonProvider : MainAPI() {
     override var mainUrl = "https://kitanonton2.blog/"
     private var directUrl: String? = null
     override var name = "KitaNonton"
@@ -79,7 +82,7 @@ open class Kitanonton : MainAPI() {
         val tvType = if (url.contains("/series/")) TvType.TvSeries else TvType.Movie
         val description = document.select("span[itemprop=reviewBody] > p").text().trim()
         val trailer = fixUrlNull(document.selectFirst("div.modal-body-trailer iframe")?.attr("src"))
-        val rating = document.selectFirst("span[itemprop=ratingValue]")?.text()?.toRatingInt()
+        val score = document.selectFirst("span[itemprop=ratingValue]")?.text()?.toScore()
         val duration = document.selectFirst(".mvici-right > p:nth-child(1)")!!.ownText().replace(Regex("[^0-9]"), "").toIntOrNull()
         val actors = document.select("span[itemprop=actor] > a").map { it.select("span").text() }
         val baseLink = fixUrl(document.select("div#mv-info > a").attr("href").toString())
@@ -99,10 +102,10 @@ open class Kitanonton : MainAPI() {
                 this.year = year
                 this.plot = description
                 this.tags = tags
-                this.rating = rating
                 this.duration = duration
                 addActors(actors)
                 addTrailer(trailer)
+                addScore(score)
             }
         } else {
             val links = app.get(baseLink).document.select("div#server-list div.server-wrapper div[id*=episode]")
@@ -112,10 +115,10 @@ open class Kitanonton : MainAPI() {
                 this.year = year
                 this.plot = description
                 this.tags = tags
-                this.rating = rating
                 this.duration = duration
                 addActors(actors)
                 addTrailer(trailer)
+                addScore(score)
             }
         }
     }
@@ -125,13 +128,14 @@ open class Kitanonton : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        data.removeSurrounding("[", "]").split(",").map { it.trim() }.apmap { link ->
-            safeApiCall {
-                loadExtractor(link, "$directUrl/", subtitleCallback, callback)
+    ): Boolean = coroutineScope {
+        val links = data.removeSurrounding("[", "]").split(",").map { it.trim() }
+        links.map { link ->
+            async {
+                safeApiCall { loadExtractor(link, "$directUrl/", subtitleCallback, callback) }
             }
-        }
-        return true
+        }.awaitAll()
+        true
     }
 
     private fun getBaseUrl(url: String): String {
