@@ -7,10 +7,6 @@ import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.safeApiCall
 import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Element
 import java.net.URI
 
@@ -82,13 +78,14 @@ open class Kitanonton : MainAPI() {
         val tvType = if (url.contains("/series/")) TvType.TvSeries else TvType.Movie
         val description = document.select("span[itemprop=reviewBody] > p").text().trim()
         val trailer = fixUrlNull(document.selectFirst("div.modal-body-trailer iframe")?.attr("src"))
-        val scoreValue = document.selectFirst("span[itemprop=ratingValue]")?.text()?.toFloatOrNull() ?: 0f
+        val ratingFloat = document.selectFirst("span[itemprop=ratingValue]")?.text()?.toFloatOrNull() ?: 0f
+        val rating = Score(ratingFloat) // <-- update ke Score API
         val duration = document.selectFirst(".mvici-right > p:nth-child(1)")!!.ownText().replace(Regex("[^0-9]"), "").toIntOrNull()
         val actors = document.select("span[itemprop=actor] > a").map { it.select("span").text() }
         val baseLink = fixUrl(document.select("div#mv-info > a").attr("href").toString())
 
         return if (tvType == TvType.TvSeries) {
-            val episodes = app.get(baseLink).document.select("div#list-eps > a")
+            val episodes = document.select("div#list-eps > a")
                 .map { Pair(it.text(), it.attr("data-iframe")) }
                 .groupBy { it.first }
                 .map { eps ->
@@ -102,20 +99,20 @@ open class Kitanonton : MainAPI() {
                 this.year = year
                 this.plot = description
                 this.tags = tags
-                this.score = scoreValue
+                this.score = rating
                 this.duration = duration
                 addActors(actors)
                 addTrailer(trailer)
             }
         } else {
-            val links = app.get(baseLink).document.select("div#server-list div.server-wrapper div[id*=episode]")
+            val links = document.select("div#server-list div.server-wrapper div[id*=episode]")
                 .map { fixUrl(base64Decode(it.attr("data-iframe"))) }.toString()
             newMovieLoadResponse(title, url, TvType.Movie, links) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = description
                 this.tags = tags
-                this.score = scoreValue
+                this.score = rating
                 this.duration = duration
                 addActors(actors)
                 addTrailer(trailer)
@@ -128,16 +125,13 @@ open class Kitanonton : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean = coroutineScope {
-        val jobs = data.removeSurrounding("[", "]").split(",").map { it.trim() }.map { link ->
-            async {
-                safeApiCall {
-                    loadExtractor(link, "$directUrl/", subtitleCallback, callback)
-                }
+    ): Boolean {
+        data.removeSurrounding("[", "]").split(",").map { it.trim() }.forEach { link ->
+            safeApiCall {
+                loadExtractor(link, "$directUrl/", subtitleCallback, callback)
             }
         }
-        jobs.awaitAll()
-        true
+        return true
     }
 
     private fun getBaseUrl(url: String): String {
