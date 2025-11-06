@@ -28,8 +28,7 @@ class MidasMovie : MainAPI() {
         val href = fixUrl(selectFirst("a[href]")?.attr("href") ?: return null)
         val poster = selectFirst("img")?.attr("src")
         val qualityText = selectFirst(".mepo .quality")?.text()
-        val type =
-            if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
+        val type = if (href.contains("/tvshows/") || href.contains("/episodes/")) TvType.TvSeries else TvType.Movie
 
         val quality = getQualityFromString(qualityText)
 
@@ -72,14 +71,14 @@ class MidasMovie : MainAPI() {
         }
 
         return if (episodes.isNotEmpty()) {
-            newTvSeriesLoadResponse(title, url, url, TvType.TvSeries, episodes) {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
                 this.tags = tags
             }
         } else {
-            newMovieLoadResponse(title, url, url, TvType.Movie) {
+            newMovieLoadResponse(title, url, TvType.Movie) {
                 this.posterUrl = poster
                 this.year = year
                 this.plot = plot
