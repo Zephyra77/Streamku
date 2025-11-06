@@ -97,7 +97,7 @@ class NontonAnimeIDProvider : MainAPI() {
         val status = getStatus(document.select("span.statusseries").text().trim())
         val type = getType(document.select("span.typeseries").text().trim().lowercase())
         val rawScore = document.select("span.nilaiseries").text().trim().toFloatOrNull()
-        val score = rawScore?.let { Score.from(it) }
+        val score = rawScore?.let { Score.from(it, 10) }
         val description = document.select(".entry-content.seriesdesc > p").text().trim()
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
         val episodes = if (document.select("button.buttfilter").isNotEmpty()) {
