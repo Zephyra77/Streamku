@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
-import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import org.jsoup.nodes.Element
 import java.net.URI
 
@@ -77,7 +77,11 @@ open class Kitanonton : MainAPI() {
         val tvType = if (url.contains("/series/")) TvType.TvSeries else TvType.Movie
         val description = document.select("span[itemprop=reviewBody] > p").text().trim()
         val trailer = fixUrlNull(document.selectFirst("div.modal-body-trailer iframe")?.attr("src"))
-        val score = document.selectFirst("span[itemprop=ratingValue]")?.text()?.toScore()
+
+        // Menggunakan Score API terbaru
+        val ratingText = document.selectFirst("span[itemprop=ratingValue]")?.text()
+        val score = ratingText?.toFloatOrNull()?.let { Score.fromRating(it) }
+
         val duration = document.selectFirst(".mvici-right > p:nth-child(1)")!!.ownText().replace(Regex("[^0-9]"), "").toIntOrNull()
         val actors = document.select("span[itemprop=actor] > a").map { it.select("span").text() }
         val baseLink = fixUrl(document.select("div#mv-info > a").attr("href").toString())
@@ -124,12 +128,9 @@ open class Kitanonton : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val links = data.removeSurrounding("[", "]").split(",").map { it.trim() }
-        for (link in links) {
-            try {
+        data.removeSurrounding("[", "]").split(",").map { it.trim() }.apmap { link ->
+            safeApiCall {
                 loadExtractor(link, "$directUrl/", subtitleCallback, callback)
-            } catch (e: Exception) {
-                logError(e)
             }
         }
         return true
