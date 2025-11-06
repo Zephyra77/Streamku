@@ -1,4 +1,4 @@
-package com.hexated
+package com.kitanonton
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
@@ -14,7 +14,7 @@ import kotlinx.coroutines.coroutineScope
 import org.jsoup.nodes.Element
 import java.net.URI
 
-open class KitaNontonProvider : MainAPI() {
+open class Kitanonton : MainAPI() {
     override var mainUrl = "https://kitanonton2.blog/"
     private var directUrl: String? = null
     override var name = "KitaNonton"
@@ -82,7 +82,7 @@ open class KitaNontonProvider : MainAPI() {
         val tvType = if (url.contains("/series/")) TvType.TvSeries else TvType.Movie
         val description = document.select("span[itemprop=reviewBody] > p").text().trim()
         val trailer = fixUrlNull(document.selectFirst("div.modal-body-trailer iframe")?.attr("src"))
-        val score = document.selectFirst("span[itemprop=ratingValue]")?.text()?.toScore()
+        val scoreValue = document.selectFirst("span[itemprop=ratingValue]")?.text()?.toFloatOrNull() ?: 0f
         val duration = document.selectFirst(".mvici-right > p:nth-child(1)")!!.ownText().replace(Regex("[^0-9]"), "").toIntOrNull()
         val actors = document.select("span[itemprop=actor] > a").map { it.select("span").text() }
         val baseLink = fixUrl(document.select("div#mv-info > a").attr("href").toString())
@@ -102,10 +102,10 @@ open class KitaNontonProvider : MainAPI() {
                 this.year = year
                 this.plot = description
                 this.tags = tags
+                this.score = scoreValue
                 this.duration = duration
                 addActors(actors)
                 addTrailer(trailer)
-                addScore(score)
             }
         } else {
             val links = app.get(baseLink).document.select("div#server-list div.server-wrapper div[id*=episode]")
@@ -115,10 +115,10 @@ open class KitaNontonProvider : MainAPI() {
                 this.year = year
                 this.plot = description
                 this.tags = tags
+                this.score = scoreValue
                 this.duration = duration
                 addActors(actors)
                 addTrailer(trailer)
-                addScore(score)
             }
         }
     }
@@ -129,12 +129,14 @@ open class KitaNontonProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
-        val links = data.removeSurrounding("[", "]").split(",").map { it.trim() }
-        links.map { link ->
+        val jobs = data.removeSurrounding("[", "]").split(",").map { it.trim() }.map { link ->
             async {
-                safeApiCall { loadExtractor(link, "$directUrl/", subtitleCallback, callback) }
+                safeApiCall {
+                    loadExtractor(link, "$directUrl/", subtitleCallback, callback)
+                }
             }
-        }.awaitAll()
+        }
+        jobs.awaitAll()
         true
     }
 
