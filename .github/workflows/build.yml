@@ -30,8 +30,16 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           path: "builds"
 
-      - name: Clean old builds
-        run: rm -f $GITHUB_WORKSPACE/builds/*.cs3 || true
+      - name: Remove Gradle and build cache
+        run: |
+          rm -rf ~/.gradle/caches
+          rm -rf ~/.gradle/daemon
+          rm -rf ~/.gradle/native
+          rm -rf ~/.gradle/wrapper
+          rm -rf $GITHUB_WORKSPACE/src/.gradle
+          rm -rf $GITHUB_WORKSPACE/src/build
+          rm -rf $GITHUB_WORKSPACE/src/**/build
+          rm -f $GITHUB_WORKSPACE/builds/*.cs3 || true
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4.6.0
@@ -42,7 +50,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3.2.2
 
-      - name: Clean Gradle build cache
+      - name: Clean Gradle build
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
@@ -52,7 +60,7 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew make makePluginsJson
+          ./gradlew make makePluginsJson --no-build-cache
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds || true
           cp build/plugins.json $GITHUB_WORKSPACE/builds || true
 
