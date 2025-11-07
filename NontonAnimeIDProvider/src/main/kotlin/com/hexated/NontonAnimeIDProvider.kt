@@ -102,17 +102,14 @@ class NontonAnimeIDProvider : MainAPI() {
         val type = getType(document.select("span.typeseries").text().trim())
         val rawScore = document.select("span.nilaiseries").text().trim().toFloatOrNull()
         val score = rawScore?.let { Score.from(it, 10) }
-
         val description = document.selectFirst(".entry-content.seriesdesc")?.text()?.trim()
             ?: document.select("p").text().takeIf { it.isNotBlank() } ?: "Plot tidak ditemukan"
-
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
         val episodes = if (document.select("button.buttfilter").isNotEmpty()) {
             val id = document.select("input[name=series_id]").attr("value")
             val numEp = document.selectFirst(".latestepisode > a")?.text()
                 ?.replace(Regex("\\D"), "").orEmpty()
-
             Jsoup.parse(
                 app.post(
                     url = "$mainUrl/wp-admin/admin-ajax.php",
@@ -176,7 +173,6 @@ class NontonAnimeIDProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val document = app.get(data).document
-
         val nonce = document.select("script#ajax_video-js-extra").attr("src")
             .substringAfter("base64,")
             .let {
@@ -187,13 +183,11 @@ class NontonAnimeIDProvider : MainAPI() {
                     null
                 }
             }
-
         document.select(".container1 > ul > li:not(.boxtab)").map { element ->
             async {
                 val dataPost = element.attr("data-post")
                 val dataNume = element.attr("data-nume")
                 val serverName = element.attr("data-type").lowercase()
-
                 val iframe = app.post(
                     url = "$mainUrl/wp-admin/admin-ajax.php",
                     data = mapOf(
@@ -210,7 +204,6 @@ class NontonAnimeIDProvider : MainAPI() {
                         app.get(it).document.select("iframe").attr("data-src")
                     else it
                 }
-
                 loadExtractor(iframe ?: return@async, "$mainUrl/", subtitleCallback, callback)
             }
         }.awaitAll()
