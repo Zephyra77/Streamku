@@ -105,33 +105,14 @@ class NontonAnimeIDProvider : MainAPI() {
             ?: document.select("p").text().takeIf { it.isNotBlank() } ?: "Tidak ada deskripsi."
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
-        val episodes = mutableListOf<Episode>()
-        val epList = document.select("div.episode-list-items a.episode-item")
-        if (epList.isNotEmpty()) {
-            epList.forEach {
-                val link = it.attr("href")
-                val epNum = Regex("Episode\\s?(\\d+)").find(it.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
-                episodes.add(newEpisode(fixUrl(link)) { this.episode = epNum })
-            }
-        } else {
-            val id = document.select("input[name=series_id]").attr("value")
-            val numEp = document.selectFirst(".latestepisode a")?.text()
-                ?.replace(Regex("\\D"), "").orEmpty()
-            val html = app.post(
-                "$mainUrl/wp-admin/admin-ajax.php",
-                data = mapOf(
-                    "misha_number_of_results" to numEp,
-                    "misha_order_by" to "date-DESC",
-                    "action" to "mishafilter",
-                    "series_id" to id
-                )
-            ).parsed<EpResponse>().content
-            Jsoup.parse(html).select("li").forEach {
-                val epNum = Regex("Episode\\s?(\\d+)").find(it.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
-                val link = it.selectFirst("a")?.attr("href") ?: return@forEach
-                episodes.add(newEpisode(fixUrl(link)) { this.episode = epNum })
-            }
-        }
+        val episodes = runCatching {
+            val epList = document.select(".epsleft a, ul.misha_posts_wrap2 li a, div.episode-list-items a.episode-item")
+            epList.mapIndexed { index, el ->
+                val ep = Regex("Episode\\s?(\\d+)").find(el.text())?.groupValues?.getOrNull(1)?.toIntOrNull() ?: (index + 1)
+                val link = el.attr("href")
+                newEpisode(fixUrl(link)) { this.episode = ep }
+            }.reversed()
+        }.getOrElse { emptyList() }
 
         val recommendations = document.select(".result li").mapNotNull {
             val epHref = it.selectFirst("a")?.attr("href") ?: return@mapNotNull null
@@ -150,7 +131,7 @@ class NontonAnimeIDProvider : MainAPI() {
             posterUrl = tracker?.image ?: poster
             backgroundPosterUrl = tracker?.cover
             this.year = year
-            addEpisodes(DubStatus.Subbed, episodes.reversed())
+            addEpisodes(DubStatus.Subbed, episodes)
             showStatus = status
             this.score = score
             plot = description
@@ -158,7 +139,7 @@ class NontonAnimeIDProvider : MainAPI() {
             this.tags = tags
             this.recommendations = recommendations
             addMalId(tracker?.malId)
-            addAniListId(tracker?.aniId?.toLongOrNull())
+            addAniListId(tracker?.aniId?.toIntOrNull())
         }
     }
 
@@ -169,6 +150,7 @@ class NontonAnimeIDProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val document = app.get(data).document
+
         val nonce = document.select("script#ajax_video-js-extra").attr("src")
             ?.substringAfter("base64,")?.takeIf { it.isNotBlank() }?.let {
                 runCatching {
