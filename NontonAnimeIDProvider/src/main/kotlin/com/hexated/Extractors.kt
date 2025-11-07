@@ -29,9 +29,7 @@ open class Gdplayer : ExtractorApi() {
 
         val json = app.get(
             "$mainUrl/api/?${kaken ?: return}=&_=${APIHolder.unixTimeMS}",
-            headers = mapOf(
-                "X-Requested-With" to "XMLHttpRequest"
-            )
+            headers = mapOf("X-Requested-With" to "XMLHttpRequest")
         ).parsedSafe<Response>()
 
         json?.sources?.map {
@@ -49,7 +47,8 @@ open class Gdplayer : ExtractorApi() {
     }
 
     private fun getQuality(str: String?): Int {
-        return Regex("(\\d{3,4})[pP]").find(str ?: "")?.groupValues?.getOrNull(1)?.toIntOrNull()
+        return Regex("(\\d{3,4})[pP]").find(str ?: "")
+            ?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: Qualities.Unknown.value
     }
 
@@ -62,7 +61,6 @@ open class Gdplayer : ExtractorApi() {
             @JsonProperty("type") val type: String? = null,
         )
     }
-
 }
 
 class Nontonanimeid : Hxfile() {
