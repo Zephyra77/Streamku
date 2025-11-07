@@ -105,14 +105,18 @@ class NontonAnimeIDProvider : MainAPI() {
             ?: document.select("p").text().takeIf { it.isNotBlank() } ?: "Tidak ada deskripsi."
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
-        val episodes = runCatching {
-            val epList = document.select(".epsleft a, ul.misha_posts_wrap2 li a, div.episode-list-items a.episode-item")
-            epList.mapIndexed { index, el ->
-                val ep = Regex("Episode\\s?(\\d+)").find(el.text())?.groupValues?.getOrNull(1)?.toIntOrNull() ?: (index + 1)
-                val link = el.attr("href")
-                newEpisode(fixUrl(link)) { this.episode = ep }
-            }.reversed()
-        }.getOrElse { emptyList() }
+        val episodeElements = document.select(".epsleft a, ul.misha_posts_wrap2 li a, div.episode-list-items a.episode-item")
+        val episodes = episodeElements.mapIndexedNotNull { index, el ->
+            val num = Regex("Episode\\s?(\\d+)").find(el.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: Regex("(\\d+)").find(el.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: (index + 1)
+            val link = el.attr("href").ifEmpty { return@mapIndexedNotNull null }
+            EpisodeData(num, fixUrl(link))
+        }.distinctBy { it.number }
+            .sortedBy { it.number }
+            .map { ep ->
+                newEpisode(ep.link) { this.episode = ep.number }
+            }
 
         val recommendations = document.select(".result li").mapNotNull {
             val epHref = it.selectFirst("a")?.attr("href") ?: return@mapNotNull null
@@ -204,6 +208,8 @@ class NontonAnimeIDProvider : MainAPI() {
             else -> attr("abs:src")
         }
     }
+
+    private data class EpisodeData(val number: Int, val link: String)
 
     private data class EpResponse(
         @JsonProperty("posts") val posts: String?,
