@@ -6,11 +6,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.extractors.Filesim
 import com.lagradost.cloudstream3.extractors.Hxfile
-import com.lagradost.cloudstream3.utils.ExtractorApi
-import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.*
 
 open class Gdplayer : ExtractorApi() {
     override val name = "Gdplayer"
@@ -71,7 +67,7 @@ class EmbedKotakAnimeid : Hxfile() {
     override val requiresReferer = true
 }
 
-class KotakAnimeidLink : ExtractorApi() {
+class KotakAnimeidLink : Hxfile() {
     override val name = "KotakAnimeid"
     override val mainUrl = "https://kotakanimeid.link"
     override val requiresReferer = false
@@ -97,7 +93,7 @@ class KotakAnimeidLink : ExtractorApi() {
     }
 }
 
-class KotakAnimeidCom : ExtractorApi() {
+class KotakAnimeidCom : Hxfile() {
     override val name = "KotakAnimeidCom"
     override val mainUrl = "https://kotakanimeid.com"
     override val requiresReferer = true
