@@ -1,6 +1,5 @@
 package com.hexated
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addAniListId
 import com.lagradost.cloudstream3.LoadResponse.Companion.addMalId
@@ -10,10 +9,8 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
-import java.util.Base64
 
 class NontonAnimeIDProvider : MainAPI() {
     override var mainUrl = "https://s7.nontonanimeid.boats"
@@ -23,11 +20,7 @@ class NontonAnimeIDProvider : MainAPI() {
     override var lang = "id"
     override val hasDownloadSupport = true
 
-    override val supportedTypes = setOf(
-        TvType.Anime,
-        TvType.AnimeMovie,
-        TvType.OVA
-    )
+    override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie, TvType.OVA)
 
     companion object {
         fun getType(t: String): TvType {
@@ -47,11 +40,7 @@ class NontonAnimeIDProvider : MainAPI() {
         }
     }
 
-    override val mainPage = mainPageOf(
-        "" to "Terbaru",
-        "ongoing-list/" to "Ongoing",
-        "popular-series/" to "Populer"
-    )
+    override val mainPage = mainPageOf("" to "Terbaru", "ongoing-list/" to "Ongoing", "popular-series/" to "Populer")
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val document = app.get("$mainUrl/${request.data}").document
@@ -61,8 +50,7 @@ class NontonAnimeIDProvider : MainAPI() {
 
     private fun Element.toSearchResult(): AnimeSearchResponse? {
         val href = selectFirst("a")?.attr("href") ?: return null
-        val title = selectFirst(".title")?.text()?.trim()
-            ?: selectFirst("h2")?.text()?.trim() ?: return null
+        val title = selectFirst(".title")?.text()?.trim() ?: selectFirst("h2")?.text()?.trim() ?: return null
         val posterUrl = fixUrlNull(selectFirst("img")?.getImageAttr())
         return newAnimeSearchResponse(title, fixUrl(href), TvType.Anime) {
             this.posterUrl = posterUrl
@@ -90,11 +78,7 @@ class NontonAnimeIDProvider : MainAPI() {
         val document = req.document
         mainUrl = getBaseUrl(req.url)
 
-        val title = document.selectFirst("h1.entry-title.cs")?.text()
-            ?.replace("Nonton Anime", "")
-            ?.replace("Sub Indo", "")
-            ?.trim().orEmpty()
-
+        val title = document.selectFirst("h1.entry-title.cs")?.text()?.replace("Nonton Anime", "")?.replace("Sub Indo", "")?.trim().orEmpty()
         val poster = document.selectFirst(".poster img")?.getImageAttr()
         val tags = document.select(".tagline a").map { it.text() }
         val year = Regex("\\d{4}").find(document.select(".bottomtitle").text())?.value?.toIntOrNull()
@@ -112,11 +96,9 @@ class NontonAnimeIDProvider : MainAPI() {
                 ?: (index + 1)
             val link = el.attr("href").ifEmpty { return@mapIndexedNotNull null }
             EpisodeData(num, fixUrl(link))
-        }.distinctBy { it.number }
-            .sortedBy { it.number }
-            .map { ep ->
-                newEpisode(ep.link) { this.episode = ep.number }
-            }
+        }.distinctBy { it.number }.sortedBy { it.number }.map { ep ->
+            newEpisode(ep.link) { this.episode = ep.number }
+        }
 
         val recommendations = document.select(".result li").mapNotNull {
             val epHref = it.selectFirst("a")?.attr("href") ?: return@mapNotNull null
@@ -154,42 +136,14 @@ class NontonAnimeIDProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val document = app.get(data).document
-
-        val nonce = document.select("script#ajax_video-js-extra").attr("src")
-            ?.substringAfter("base64,")?.takeIf { it.isNotBlank() }?.let {
-                runCatching {
-                    val decoded = String(Base64.getDecoder().decode(it))
-                    Regex("nonce\":\"(\\S+?)\"").find(decoded)?.groupValues?.get(1)
-                }.getOrNull()
-            }
-
-        document.select(".container1 > ul > li:not(.boxtab)").map { element ->
+        document.select("#download_area .listlink a").map { element ->
             async {
-                val dataPost = element.attr("data-post")
-                val dataNume = element.attr("data-nume")
-                val serverName = element.attr("data-type").orEmpty().lowercase()
-
-                val iframe = runCatching {
-                    app.post(
-                        "$mainUrl/wp-admin/admin-ajax.php",
-                        data = mapOf(
-                            "action" to "player_ajax",
-                            "nonce" to (nonce ?: ""),
-                            "serverName" to serverName,
-                            "nume" to dataNume,
-                            "post" to dataPost
-                        ),
-                        referer = data,
-                        headers = mapOf("X-Requested-With" to "XMLHttpRequest")
-                    ).document.selectFirst("iframe")?.attr("src")?.let {
-                        if (it.contains("/video-frame/"))
-                            app.get(it).document.select("iframe").attr("data-src")
-                        else it
+                val url = element.attr("href")
+                val quality = element.text()
+                if (url.isNotBlank()) {
+                    loadExtractor(url, mainUrl, subtitleCallback) { link ->
+                        callback(link.copy(name = "$quality (${link.name})"))
                     }
-                }.getOrNull()
-
-                if (!iframe.isNullOrBlank()) {
-                    loadExtractor(iframe, "$mainUrl/", subtitleCallback, callback)
                 }
             }
         }.awaitAll()
@@ -210,11 +164,4 @@ class NontonAnimeIDProvider : MainAPI() {
     }
 
     private data class EpisodeData(val number: Int, val link: String)
-
-    private data class EpResponse(
-        @JsonProperty("posts") val posts: String?,
-        @JsonProperty("max_page") val max_page: Int?,
-        @JsonProperty("found_posts") val found_posts: Int?,
-        @JsonProperty("content") val content: String
-    )
 }
