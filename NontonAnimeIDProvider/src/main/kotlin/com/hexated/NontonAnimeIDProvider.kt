@@ -191,7 +191,7 @@ class NontonAnimeIDProvider : MainAPI() {
 
         val items = document.select(".container1 > ul > li:not(.boxtab)")
 
-        items.map { element ->
+        items.map { element: Element ->
             async {
                 try {
                     val dataPost = element.attr("data-post")
