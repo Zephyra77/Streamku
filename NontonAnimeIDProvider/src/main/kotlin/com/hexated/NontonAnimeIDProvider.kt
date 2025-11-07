@@ -181,18 +181,24 @@ class NontonAnimeIDProvider : MainAPI() {
         val document = app.get(data).document
         val nonce = document.select("script#ajax_video-js-extra").attr("src")
             ?.substringAfter("base64,")?.takeIf { it.isNotBlank() }?.let {
-                runCatching {
+                try {
                     val decoded = String(Base64.getDecoder().decode(it))
                     Regex("nonce\":\"(\\S+?)\"").find(decoded)?.groupValues?.get(1)
-                }.getOrNull()
+                } catch (_: Exception) {
+                    null
+                }
             }
-        document.select(".container1 > ul > li:not(.boxtab)").map { element ->
+
+        val items = document.select(".container1 > ul > li:not(.boxtab)")
+
+        items.map { element ->
             async {
-                val dataPost = element.attr("data-post")
-                val dataNume = element.attr("data-nume")
-                val serverName = element.attr("data-type").orEmpty().lowercase()
-                val iframe = runCatching {
-                    app.post(
+                try {
+                    val dataPost = element.attr("data-post")
+                    val dataNume = element.attr("data-nume")
+                    val serverName = element.attr("data-type").orEmpty().lowercase()
+
+                    val response = app.post(
                         "$mainUrl/wp-admin/admin-ajax.php",
                         data = mapOf(
                             "action" to "player_ajax",
@@ -203,14 +209,18 @@ class NontonAnimeIDProvider : MainAPI() {
                         ),
                         referer = data,
                         headers = mapOf("X-Requested-With" to "XMLHttpRequest")
-                    ).document.selectFirst("iframe")?.attr("src")?.let {
-                        if (it.contains("/video-frame/"))
-                            app.get(it).document.select("iframe").attr("data-src")
-                        else it
+                    )
+
+                    val iframeSrc = response.document.selectFirst("iframe")?.attr("src")?.let {
+                        if (it.contains("/video-frame/")) {
+                            app.get(it).document.selectFirst("iframe")?.attr("data-src")
+                        } else it
                     }
-                }.getOrNull()
-                if (!iframe.isNullOrBlank()) {
-                    loadExtractor(iframe, "$mainUrl/", subtitleCallback, callback)
+
+                    if (!iframeSrc.isNullOrBlank()) {
+                        loadExtractor(iframeSrc, "$mainUrl/", subtitleCallback, callback)
+                    }
+                } catch (_: Exception) {
                 }
             }
         }.awaitAll()
