@@ -84,7 +84,9 @@ class KotakAnimeidLink : ExtractorApi() {
     ) {
         val res = app.get(url, referer = referer).document
         val script = res.selectFirst("script:containsData(sources:)")?.data() ?: return
-        val m3u8 = Regex("\"file\"\\s*:\\s*\"(https[^\"]+\\.m3u8)\"").find(script)?.groupValues?.getOrNull(1)
+        val m3u8 = Regex("\"file\"\\s*:\\s*\"(https[^\"]+\\.m3u8)\"")
+            .find(script)?.groupValues?.getOrNull(1)
+
         if (!m3u8.isNullOrBlank()) {
             callback.invoke(
                 newExtractorLink(name, name, m3u8, ExtractorLinkType.M3U8) {
@@ -95,15 +97,43 @@ class KotakAnimeidLink : ExtractorApi() {
     }
 }
 
+class KotakAnimeidCom : ExtractorApi() {
+    override val name = "KotakAnimeidCom"
+    override val mainUrl = "https://kotakanimeid.com"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val headers = mapOf(
+            "Referer" to (referer ?: mainUrl),
+            "Origin" to mainUrl,
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        )
+
+        val res = app.get(url, headers = headers).document
+        val script = res.selectFirst("script:containsData(sources:)")?.data() ?: return
+        val m3u8 = Regex("\"file\"\\s*:\\s*\"(https[^\"]+\\.m3u8)\"")
+            .find(script)?.groupValues?.getOrNull(1)
+
+        if (!m3u8.isNullOrBlank()) {
+            callback.invoke(
+                newExtractorLink(name, name, m3u8, ExtractorLinkType.M3U8) {
+                    quality = Qualities.Unknown.value
+                }
+            )
+        } else {
+            throw Exception("Tidak Ada Tautan Yang Ditemukan")
+        }
+    }
+}
+
 class Kotaksb : Hxfile() {
     override val name = "Kotaksb"
     override val mainUrl = "https://kotaksb.pro"
-    override val requiresReferer = true
-}
-
-class KotakAnimeidCom : Hxfile() {
-    override val name = "KotakAnimeidCom"
-    override val mainUrl = "https://kotakanimeid.com"
     override val requiresReferer = true
 }
 
