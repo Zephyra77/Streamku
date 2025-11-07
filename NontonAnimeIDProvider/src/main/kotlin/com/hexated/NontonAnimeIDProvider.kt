@@ -105,7 +105,7 @@ class NontonAnimeIDProvider : MainAPI() {
             ?: document.select("p").text().takeIf { it.isNotBlank() } ?: "Tidak ada deskripsi."
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
-        val episodes = runCatching<EpisodeList> {
+        val episodes: List<Episode> = try {
             val id = document.select("input[name=series_id]").attr("value")
             val totalEpText = document.selectFirst(".latestepisode a")?.text()?.replace(Regex("\\D"), "").orEmpty()
             val totalEp = totalEpText.toIntOrNull() ?: 0
@@ -135,7 +135,7 @@ class NontonAnimeIDProvider : MainAPI() {
                 page++
             }
             allEpisodes.distinctBy { it.url }.sortedBy { it.episode }
-        }.getOrElse {
+        } catch (e: Exception) {
             document.select("ul.misha_posts_wrap2 > li").mapNotNull { li ->
                 val ep = Regex("Episode\\s?(\\d+)").find(li.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
                 val link = li.selectFirst("a")?.attr("href") ?: return@mapNotNull null
