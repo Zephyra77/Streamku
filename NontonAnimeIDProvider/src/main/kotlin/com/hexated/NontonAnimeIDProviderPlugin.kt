@@ -6,12 +6,13 @@ import com.lagradost.cloudstream3.plugins.Plugin
 import android.content.Context
 
 @CloudstreamPlugin
-class NontonAnimeIDProviderPlugin: Plugin() {
+class NontonAnimeIDProviderPlugin : Plugin() {
     override fun load(context: Context) {
         // All providers should be added in this manner. Please don't edit the providers list directly.
         registerMainAPI(NontonAnimeIDProvider())
         registerExtractorAPI(Nontonanimeid())
         registerExtractorAPI(EmbedKotakAnimeid())
+        registerExtractorAPI(KotakAnimeidLink())
         registerExtractorAPI(KotakAnimeidCom())
         registerExtractorAPI(Gdplayer())
         registerExtractorAPI(Kotaksb())
