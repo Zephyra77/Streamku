@@ -24,23 +24,19 @@ open class Gdplayer : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val res = app.get(url, referer = referer).document
-        val script = res.selectFirst("script:containsData(player = \"\")")?.data()
-        val kaken = script?.substringAfter("kaken = \"")?.substringBefore("\"")
+        val script = res.selectFirst("script:containsData(kaken =)")?.data()
+        val kaken = script?.substringAfter("kaken = \"")?.substringBefore("\"") ?: return
 
         val json = app.get(
-            "$mainUrl/api/?${kaken ?: return}=&_=${APIHolder.unixTimeMS}",
+            "$mainUrl/api/?$kaken=&_=${APIHolder.unixTimeMS}",
             headers = mapOf("X-Requested-With" to "XMLHttpRequest")
-        ).parsedSafe<Response>()
+        ).parsedSafe<Response>() ?: return
 
-        json?.sources?.map {
+        json.sources?.forEach { src ->
+            val file = src.file ?: return@forEach
             callback.invoke(
-                newExtractorLink(
-                    this.name,
-                    this.name,
-                    it.file ?: return@map,
-                    INFER_TYPE
-                ) {
-                    this.quality = getQuality(json.title)
+                newExtractorLink(name, name, file, INFER_TYPE) {
+                    quality = getQuality(json.title)
                 }
             )
         }
@@ -54,35 +50,59 @@ open class Gdplayer : ExtractorApi() {
 
     data class Response(
         @JsonProperty("title") val title: String? = null,
-        @JsonProperty("sources") val sources: ArrayList<Sources>? = null,
+        @JsonProperty("sources") val sources: ArrayList<Source>? = null
     ) {
-        data class Sources(
+        data class Source(
             @JsonProperty("file") val file: String? = null,
-            @JsonProperty("type") val type: String? = null,
+            @JsonProperty("type") val type: String? = null
         )
     }
 }
 
 class Nontonanimeid : Hxfile() {
     override val name = "Nontonanimeid"
-    override val mainUrl = "https://nontonanimeid.com"
+    override val mainUrl = "https://nontonanimeid.boats"
     override val requiresReferer = true
 }
 
 class EmbedKotakAnimeid : Hxfile() {
     override val name = "EmbedKotakAnimeid"
-    override val mainUrl = "https://embed2.kotakanimeid.com"
+    override val mainUrl = "https://embed.kotakanimeid.link"
     override val requiresReferer = true
+}
+
+class KotakAnimeidLink : ExtractorApi() {
+    override val name = "KotakAnimeid"
+    override val mainUrl = "https://kotakanimeid.link"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val res = app.get(url, referer = referer).document
+        val script = res.selectFirst("script:containsData(sources:)")?.data() ?: return
+        val m3u8 = Regex("\"file\"\\s*:\\s*\"(https[^\"]+\\.m3u8)\"").find(script)?.groupValues?.getOrNull(1)
+        if (!m3u8.isNullOrBlank()) {
+            callback.invoke(
+                newExtractorLink(name, name, m3u8, "application/x-mpegURL") {
+                    quality = Qualities.Unknown.value
+                }
+            )
+        }
+    }
 }
 
 class Kotaksb : Hxfile() {
     override val name = "Kotaksb"
-    override val mainUrl = "https://kotaksb.fun"
+    override val mainUrl = "https://kotaksb.pro"
     override val requiresReferer = true
 }
 
 class KotakAnimeidCom : Hxfile() {
-    override val name = "KotakAnimeid"
+    override val name = "KotakAnimeidCom"
     override val mainUrl = "https://kotakanimeid.com"
     override val requiresReferer = true
 }
