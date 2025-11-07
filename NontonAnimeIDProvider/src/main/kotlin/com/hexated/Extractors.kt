@@ -8,7 +8,7 @@ import com.lagradost.cloudstream3.extractors.Filesim
 import com.lagradost.cloudstream3.extractors.Hxfile
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
 
@@ -35,7 +35,7 @@ open class Gdplayer : ExtractorApi() {
         json.sources?.forEach { src ->
             val file = src.file ?: return@forEach
             callback.invoke(
-                newExtractorLink(name, name, file, INFER_TYPE) {
+                newExtractorLink(name, name, file, ExtractorLinkType.VIDEO) {
                     quality = getQuality(json.title)
                 }
             )
@@ -87,7 +87,7 @@ class KotakAnimeidLink : ExtractorApi() {
         val m3u8 = Regex("\"file\"\\s*:\\s*\"(https[^\"]+\\.m3u8)\"").find(script)?.groupValues?.getOrNull(1)
         if (!m3u8.isNullOrBlank()) {
             callback.invoke(
-                newExtractorLink(name, name, m3u8, "application/x-mpegURL") {
+                newExtractorLink(name, name, m3u8, ExtractorLinkType.M3U8) {
                     quality = Qualities.Unknown.value
                 }
             )
