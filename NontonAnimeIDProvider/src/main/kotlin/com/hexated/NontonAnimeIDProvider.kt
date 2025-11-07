@@ -73,13 +73,13 @@ class NontonAnimeIDProvider : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val link = "$mainUrl/?s=$query"
         val document = app.get(link).document
-        return document.select("div.animepost").mapNotNull { el ->
-            val href = el.selectFirst("a")?.attr("href") ?: return@mapNotNull null
-            val title = el.selectFirst("h2")?.text()?.trim() ?: return@mapNotNull null
-            val poster = el.selectFirst("img")?.getImageAttr()
-            val type = getType(el.selectFirst(".type")?.text() ?: "")
-            newAnimeSearchResponse(title, fixUrl(href), type) {
-                posterUrl = poster
+        return document.select(".result > ul > li").mapNotNull {
+            val title = it.selectFirst("h2")?.text()?.trim() ?: return@mapNotNull null
+            val poster = it.selectFirst("img")?.getImageAttr()
+            val tvType = getType(it.selectFirst(".boxinfores > span.typeseries")?.text() ?: "")
+            val href = it.selectFirst("a")?.attr("href") ?: return@mapNotNull null
+            newAnimeSearchResponse(title, fixUrl(href), tvType) {
+                this.posterUrl = poster
                 addDubStatus(dubExist = false, subExist = true)
             }
         }
@@ -88,7 +88,7 @@ class NontonAnimeIDProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val req = app.get(url)
         val document = req.document
-        mainUrl = getBaseUrl(req.request.url)
+        mainUrl = getBaseUrl(req.url)
 
         val title = document.selectFirst("h1.entry-title.cs")?.text()
             ?.replace("Nonton Anime", "")
@@ -105,43 +105,18 @@ class NontonAnimeIDProvider : MainAPI() {
             ?: document.select("p").text().takeIf { it.isNotBlank() } ?: "Tidak ada deskripsi."
         val trailer = document.selectFirst("a.trailerbutton")?.attr("href")
 
-        val episodes: List<Episode> = try {
-            val id = document.select("input[name=series_id]").attr("value")
-            val totalEpText = document.selectFirst(".latestepisode a")?.text()?.replace(Regex("\\D"), "").orEmpty()
-            val totalEp = totalEpText.toIntOrNull() ?: 0
-            val allEpisodes = mutableListOf<Episode>()
-            var page = 1
-            while (true) {
-                val ajax = app.post(
-                    "$mainUrl/wp-admin/admin-ajax.php",
-                    data = mapOf(
-                        "action" to "mishafilter",
-                        "series_id" to id,
-                        "misha_number_of_results" to totalEp.toString(),
-                        "misha_order_by" to "date-ASC",
-                        "page" to page.toString()
-                    ),
-                    referer = url,
-                    headers = mapOf("X-Requested-With" to "XMLHttpRequest")
-                ).parsedSafe<EpResponse>() ?: break
-                val parsed = Jsoup.parse(ajax.content).select("li").mapNotNull { li ->
-                    val link = li.selectFirst("a")?.attr("href") ?: return@mapNotNull null
-                    val epNum = Regex("Episode\\s?(\\d+)").find(li.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
-                    newEpisode(fixUrl(link)) { this.episode = epNum }
-                }
-                if (parsed.isEmpty()) break
-                allEpisodes.addAll(parsed)
-                if (parsed.size < 20) break
-                page++
+        val episodeElements = document.select(".epsleft a, ul.misha_posts_wrap2 li a, div.episode-list-items a.episode-item")
+        val episodes = episodeElements.mapIndexedNotNull { index, el ->
+            val num = Regex("Episode\\s?(\\d+)").find(el.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: Regex("(\\d+)").find(el.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
+                ?: (index + 1)
+            val link = el.attr("href").ifEmpty { return@mapIndexedNotNull null }
+            EpisodeData(num, fixUrl(link))
+        }.distinctBy { it.number }
+            .sortedBy { it.number }
+            .map { ep ->
+                newEpisode(ep.link) { this.episode = ep.number }
             }
-            allEpisodes.distinctBy { it.url }.sortedBy { it.episode }
-        } catch (e: Exception) {
-            document.select("ul.misha_posts_wrap2 > li").mapNotNull { li ->
-                val ep = Regex("Episode\\s?(\\d+)").find(li.text())?.groupValues?.getOrNull(1)?.toIntOrNull()
-                val link = li.selectFirst("a")?.attr("href") ?: return@mapNotNull null
-                newEpisode(fixUrl(link)) { this.episode = ep }
-            }.sortedBy { it.episode }
-        }
 
         val recommendations = document.select(".result li").mapNotNull {
             val epHref = it.selectFirst("a")?.attr("href") ?: return@mapNotNull null
@@ -179,26 +154,23 @@ class NontonAnimeIDProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean = coroutineScope {
         val document = app.get(data).document
+
         val nonce = document.select("script#ajax_video-js-extra").attr("src")
             ?.substringAfter("base64,")?.takeIf { it.isNotBlank() }?.let {
-                try {
+                runCatching {
                     val decoded = String(Base64.getDecoder().decode(it))
                     Regex("nonce\":\"(\\S+?)\"").find(decoded)?.groupValues?.get(1)
-                } catch (_: Exception) {
-                    null
-                }
+                }.getOrNull()
             }
 
-        val items = document.select(".container1 > ul > li:not(.boxtab)")
-
-        items.map { element: Element ->
+        document.select(".container1 > ul > li:not(.boxtab)").map { element ->
             async {
-                try {
-                    val dataPost = element.attr("data-post")
-                    val dataNume = element.attr("data-nume")
-                    val serverName = element.attr("data-type").orEmpty().lowercase()
+                val dataPost = element.attr("data-post")
+                val dataNume = element.attr("data-nume")
+                val serverName = element.attr("data-type").orEmpty().lowercase()
 
-                    val response = app.post(
+                val iframe = runCatching {
+                    app.post(
                         "$mainUrl/wp-admin/admin-ajax.php",
                         data = mapOf(
                             "action" to "player_ajax",
@@ -209,18 +181,16 @@ class NontonAnimeIDProvider : MainAPI() {
                         ),
                         referer = data,
                         headers = mapOf("X-Requested-With" to "XMLHttpRequest")
-                    )
-
-                    val iframeSrc = response.document.selectFirst("iframe")?.attr("src")?.let {
-                        if (it.contains("/video-frame/")) {
-                            app.get(it).document.selectFirst("iframe")?.attr("data-src")
-                        } else it
+                    ).document.selectFirst("iframe")?.attr("src")?.let {
+                        if (it.contains("/video-frame/"))
+                            app.get(it).document.select("iframe").attr("data-src")
+                        else it
                     }
+                }.getOrNull()
 
-                    if (!iframeSrc.isNullOrBlank()) {
-                        loadExtractor(iframeSrc, "$mainUrl/", subtitleCallback, callback)
-                    }
-                } catch (_: Exception) { }
+                if (!iframe.isNullOrBlank()) {
+                    loadExtractor(iframe, "$mainUrl/", subtitleCallback, callback)
+                }
             }
         }.awaitAll()
         true
@@ -238,6 +208,8 @@ class NontonAnimeIDProvider : MainAPI() {
             else -> attr("abs:src")
         }
     }
+
+    private data class EpisodeData(val number: Int, val link: String)
 
     private data class EpResponse(
         @JsonProperty("posts") val posts: String?,
