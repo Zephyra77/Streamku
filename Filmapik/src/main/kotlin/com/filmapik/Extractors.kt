@@ -16,6 +16,7 @@ class EfekStream : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val html = app.get(url, referer = referer).text
+
         val fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
             ?: Regex("""sources\s*:\s*\[\s*\{\s*"file"\s*:\s*"([^"]+)"""").find(html)?.groupValues?.get(1)
             ?: return
@@ -45,6 +46,7 @@ class ShortIcu : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val html = app.get(url, referer = referer).text
+
         val fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
             ?: Regex("""sources\s*:\s*\[\s*\{\s*"file"\s*:\s*"([^"]+)"""").find(html)?.groupValues?.get(1)
             ?: return
@@ -60,61 +62,4 @@ class ShortIcu : ExtractorApi() {
             )
         )
     }
-}
-
-suspend fun MainAPI.loadMovieOrEpisodeLinks(
-    url: String,
-    subtitleCallback: (SubtitleFile) -> Unit,
-    callback: (ExtractorLink) -> Unit
-) {
-    val document = app.get(url).document
-
-    document.select("li.dooplay_player_option[data-url]").forEach { el ->
-        val link = el.attr("data-url").trim()
-        if (link.isNotEmpty() && link != "about:blank") {
-            val extractor = when {
-                link.contains("efek.stream") -> EfekStream()
-                link.contains("short.icu") -> ShortIcu()
-                else -> null
-            }
-            extractor?.getUrl(link, url, subtitleCallback, callback)
-        }
-    }
-
-    document.select("div#download a.myButton[href]").forEach { el ->
-        val href = el.attr("href").trim()
-        if (href.isNotEmpty() && href != "about:blank") {
-            val extractor = when {
-                href.contains("efek.stream") -> EfekStream()
-                href.contains("short.icu") -> ShortIcu()
-                else -> null
-            }
-            extractor?.getUrl(href, url, subtitleCallback, callback)
-        }
-    }
-}
-
-suspend fun MainAPI.parseEpisodes(document: org.jsoup.nodes.Document): List<Episode> {
-    val episodes = mutableListOf<Episode>()
-    val seasonBlocks = document.select("#seasons .se-c")
-    seasonBlocks.forEach { block ->
-        val seasonNum = block.selectFirst(".se-q .se-t")?.text()?.toIntOrNull() ?: 1
-        val epList = block.select(".se-a ul.episodios li a")
-        epList.forEachIndexed { index, ep ->
-            val href = fixUrl(ep.attr("href"))
-            val epName = ep.text().ifBlank { "Episode ${index + 1}" }
-            episodes.add(
-                newEpisode(href) {
-                    this.name = epName
-                    this.season = seasonNum
-                    this.episode = index + 1
-                }
-            )
-        }
-    }
-    return episodes
-}
-
-private fun fixUrl(url: String): String {
-    return if (url.startsWith("http")) url else "https://filmapik.singles$url"
-}
+                     }
