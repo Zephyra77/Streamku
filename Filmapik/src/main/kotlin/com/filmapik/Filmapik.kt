@@ -126,15 +126,26 @@ class Filmapik : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-        val iframeList = document.select("div.cframe iframe, iframe.metaframe")
+        val playerOptions = document.select("li.dooplay_player_option[data-url]")
+        playerOptions.forEach { option ->
+            val url = option.attr("data-url").trim()
+            if (url.isNotEmpty()) {
+                loadExtractor(httpsify(url), data, subtitleCallback, callback)
+            }
+        }
+        val iframeList = document.select("iframe.metaframe, iframe[src]")
         iframeList.forEach { frame ->
             val src = frame.attr("src").trim()
-            if (src.isNotEmpty()) loadExtractor(httpsify(src), data, subtitleCallback, callback)
+            if (src.isNotEmpty() && src != "about:blank") {
+                loadExtractor(httpsify(src), data, subtitleCallback, callback)
+            }
         }
-        val downloadList = document.select("div.links_table a.myButton")
+        val downloadList = document.select("div.links_table a.myButton[href]")
         downloadList.forEach { dl ->
             val href = dl.attr("href").trim()
-            if (href.isNotEmpty()) loadExtractor(href, data, subtitleCallback, callback)
+            if (href.isNotEmpty()) {
+                loadExtractor(httpsify(href), data, subtitleCallback, callback)
+            }
         }
         return true
     }
