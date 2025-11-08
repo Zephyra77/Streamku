@@ -3,15 +3,10 @@ package com.filmapik
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.LoadResponse.Companion.addScore
-import com.lagradost.cloudstream3.MainAPI
-import com.lagradost.cloudstream3.SearchResponse
-import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
-import java.net.URI
 
 class Filmapik : MainAPI() {
 
@@ -43,10 +38,19 @@ class Filmapik : MainAPI() {
         val posterUrl = fixUrlNull(this.selectFirst("img[src]")?.attr("src")).fixImageQuality()
         val ratingText = this.selectFirst("div.rating")?.ownText()?.trim()
         val quality = this.selectFirst("span.quality")?.text()?.trim()
-        return newMovieSearchResponse(title, href, TvType.Movie) {
+
+        val type = when {
+            this.selectFirst("span.meta:contains(Episode)") != null -> TvType.TvSeries
+            href.contains("/tvshows/") -> TvType.TvSeries
+            else -> TvType.Movie
+        }
+
+        return newMovieSearchResponse(title, href, type) {
             this.posterUrl = posterUrl
-            if (quality != null && quality.isNotEmpty()) addQuality(quality)
-            this.score = Score.from10(ratingText?.toDoubleOrNull())
+            if (type == TvType.Movie) {
+                if (quality != null && quality.isNotEmpty()) addQuality(quality)
+                this.score = Score.from10(ratingText?.toDoubleOrNull())
+            }
         }
     }
 
@@ -61,14 +65,18 @@ class Filmapik : MainAPI() {
         val img = a.selectFirst("img[src][alt]") ?: return null
         val title = img.attr("alt").trim()
         val posterUrl = fixUrlNull(img.attr("src")).fixImageQuality()
-        return newMovieSearchResponse(title, href, TvType.Movie) {
+
+        val type = if (href.contains("/tvshows/")) TvType.TvSeries else TvType.Movie
+
+        return newMovieSearchResponse(title, href, type) {
             this.posterUrl = posterUrl
         }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
-        val title = document.selectFirst("h1[itemprop=name]")?.text()?.replace("Nonton", "")?.trim() ?: return newMovieLoadResponse("", url, TvType.Movie, url)
+        val title = document.selectFirst("h1[itemprop=name]")?.text()?.replace("Nonton", "")?.trim()
+            ?: return newMovieLoadResponse("", url, TvType.Movie, url)
         val poster = document.selectFirst("div.poster img")?.attr("src")?.let { fixUrl(it) }
         val tags = document.select("span.sgeneros a").map { it.text() }
         val actors = document.select("span.tagline:contains(Stars:) a").map { it.text() }
@@ -77,7 +85,7 @@ class Filmapik : MainAPI() {
         val recommendations = document.select("#single_relacionados article").mapNotNull { it.toRecommendResult() }
 
         val episodeDiv = document.selectFirst("div#episodes")
-        if (episodeDiv != null) {
+        return if (episodeDiv != null) {
             val episodes = episodeDiv.select("ul.episodios li a").mapIndexed { index, ep ->
                 val href = fixUrl(ep.attr("href"))
                 val name = ep.text().ifBlank { "Episode ${index + 1}" }
@@ -86,7 +94,7 @@ class Filmapik : MainAPI() {
                     this.episode = index + 1
                 }
             }
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.tags = tags
@@ -95,7 +103,7 @@ class Filmapik : MainAPI() {
                 this.recommendations = recommendations
             }
         } else {
-            return newMovieLoadResponse(title, url, TvType.Movie, url) {
+            newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = poster
                 this.year = year
                 this.tags = tags
@@ -106,7 +114,12 @@ class Filmapik : MainAPI() {
         }
     }
 
-    override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
         val document = app.get(data).document
         document.select("div.cframe iframe, iframe.metaframe").forEach { iframe ->
             val src = iframe.attr("src")
