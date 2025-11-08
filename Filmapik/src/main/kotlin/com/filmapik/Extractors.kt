@@ -1,11 +1,11 @@
 package com.filmapik
 
-import com.lagradost.cloudstream3.MainExtractor
+import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.SubtitleFile
 
-class EfekStream : MainExtractor() {
+class EfekStream : ExtractorApi() {
     override val name = "EfekStream"
     override val mainUrl = "https://v2.efek.stream"
     override val requiresReferer = false
