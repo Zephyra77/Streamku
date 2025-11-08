@@ -9,6 +9,8 @@ import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
+import com.filmapik.extractors.EfekStream
+import com.filmapik.extractors.ShortIcu
 import org.jsoup.nodes.Element
 
 class Filmapik : MainAPI() {
@@ -127,37 +129,27 @@ class Filmapik : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
 
-        document.select("ul#playeroptionsul li[data-nume][data-post][data-type]").forEach { el ->
-            val post = el.attr("data-post")
-            val nume = el.attr("data-nume")
-            val type = el.attr("data-type")
-            if (post.isNotEmpty() && nume.isNotEmpty()) {
-                val ajaxUrl = "$mainUrl/wp-admin/admin-ajax.php"
-                val body = mapOf(
-                    "action" to "doo_player_ajax",
-                    "post" to post,
-                    "nume" to nume,
-                    "type" to type
-                )
-                val response = app.post(ajaxUrl, data = body).text
-                val iframeSrc = Regex("""src=['"]([^'"]+)['"]""").find(response)?.groupValues?.get(1)
-                if (!iframeSrc.isNullOrEmpty()) {
-                    loadExtractor(httpsify(iframeSrc), data, subtitleCallback, callback)
+        document.select("li.dooplay_player_option[data-url]").forEach { el ->
+            val link = el.attr("data-url").trim()
+            if (link.isNotEmpty() && link != "about:blank") {
+                val extractor = when {
+                    link.contains("efek.stream") -> EfekStream()
+                    link.contains("short.icu") -> ShortIcu()
+                    else -> null
                 }
+                extractor?.getUrl(link, data, subtitleCallback, callback)
             }
         }
 
-        document.select("iframe[src]").forEach { frame ->
-            val src = frame.attr("src").trim()
-            if (src.isNotEmpty() && src != "about:blank") {
-                loadExtractor(httpsify(src), data, subtitleCallback, callback)
-            }
-        }
-
-        document.select("a.myButton[href]").forEach { el ->
+        document.select("div#download a.myButton[href]").forEach { el ->
             val href = el.attr("href").trim()
-            if (href.isNotEmpty()) {
-                loadExtractor(httpsify(href), data, subtitleCallback, callback)
+            if (href.isNotEmpty() && href != "about:blank") {
+                val extractor = when {
+                    href.contains("efek.stream") -> EfekStream()
+                    href.contains("short.icu") -> ShortIcu()
+                    else -> null
+                }
+                extractor?.getUrl(href, data, subtitleCallback, callback)
             }
         }
 
