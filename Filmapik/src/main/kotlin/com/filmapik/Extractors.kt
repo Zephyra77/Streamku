@@ -1,8 +1,9 @@
 package com.filmapik
 
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.SubtitleFile
+import com.lagradost.cloudstream3.utils.Qualities
 import java.net.URI
 
 class EfekStream : ExtractorApi() {
@@ -46,29 +47,12 @@ class EfekStream : ExtractorApi() {
                 for (base in candidates) {
                     val full = base.trimEnd('/') + rel
                     try {
-                        val resp = app.head(full, referer = url)
-                        if (resp.responseCode == 200) {
-                            fileUrl = full
-                            break
-                        }
-                        val ct = resp.headers["content-type"] ?: ""
-                        if (resp.responseCode in 200..299 && (ct.contains("mpegurl", true) || ct.contains("application/vnd.apple.mpegurl", true) || ct.contains("video", true))) {
+                        val r = app.head(full, referer = url)
+                        if (r.status.value in 200..299) {
                             fileUrl = full
                             break
                         }
                     } catch (_: Exception) {}
-                }
-                if (fileUrl == null) {
-                    for (base in candidates) {
-                        val full = base.trimEnd('/') + rel
-                        try {
-                            val resp = app.get(full, referer = url)
-                            if (resp.responseCode == 200) {
-                                fileUrl = full
-                                break
-                            }
-                        } catch (_: Exception) {}
-                    }
                 }
             }
         }
@@ -83,7 +67,7 @@ class EfekStream : ExtractorApi() {
                         try {
                             val candidate = h.trimEnd('/') + fileUrl
                             val r = app.head(candidate, referer = url)
-                            if (r.responseCode == 200) candidate else null
+                            if (r.status.value in 200..299) candidate else null
                         } catch (_: Exception) { null }
                     } ?: (mainUrl + fileUrl)
                 }
@@ -93,13 +77,10 @@ class EfekStream : ExtractorApi() {
         } else fileUrl
 
         callback(
-            newExtractorLink(
-                source = name,
-                name = name,
-                url = finalUrl,
-                referer = referer ?: url,
-                quality = Qualities.Unknown.value
-            )
+            newExtractorLink(name, name, finalUrl) {
+                this.referer = referer ?: url
+                this.quality = Qualities.Unknown.value
+            }
         )
     }
 }
