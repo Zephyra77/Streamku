@@ -85,6 +85,27 @@
         "name": "Dutamovie"
     },
     {
+        "iconUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://filmapik.singles&size=%size%",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 13392,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Zephyra77"
+        ],
+        "tvTypes": [
+            "AsianDrama",
+            "TvSeries",
+            "Movie"
+        ],
+        "version": 1,
+        "internalName": "Filmapik",
+        "description": "Filmapik",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/Filmapik.cs3",
+        "name": "Filmapik"
+    },
+    {
         "iconUrl": "https://www.google.com/s2/favicons?domain=funmovieslix.com&sz=%size%",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Zephyra77/Streamku",
