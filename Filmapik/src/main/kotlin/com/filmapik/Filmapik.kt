@@ -95,7 +95,6 @@ class Filmapik : MainAPI() {
                             this.name = epName
                             this.season = seasonNum
                             this.episode = index + 1
-                            this.plot = description
                         }
                     )
                 }
