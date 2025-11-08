@@ -10,8 +10,8 @@ import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
-import java.net.URI
 import org.jsoup.nodes.Element
+import java.net.URI
 
 class Filmapik : MainAPI() {
 
@@ -19,13 +19,12 @@ class Filmapik : MainAPI() {
     override var name = "Filmapik"
     override val hasMainPage = true
     override var lang = "id"
-    override val supportedTypes =
-        setOf(TvType.Movie, TvType.TvSeries, TvType.Anime, TvType.AsianDrama)
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime, TvType.AsianDrama)
 
     override val mainPage = mainPageOf(
+        "category/box-office/page/%d/" to "Box Office",
         "tvshows/page/%d/" to "Serial Terbaru",
         "latest/page/%d/" to "Film Terbaru",
-        "category/box-office/page/%d/" to "Box Office",
         "category/action/page/%d/" to "Action",
         "category/romance/page/%d/" to "Romance"
     )
@@ -43,14 +42,17 @@ class Filmapik : MainAPI() {
         val href = fixUrl(a.attr("href"))
         val posterUrl = fixUrlNull(this.selectFirst("img[src]")?.attr("src")).fixImageQuality()
         val ratingText = this.selectFirst("div.rating")?.ownText()?.trim()
-        val score = ratingText?.toDoubleOrNull()?.let { Score.from10(it) }
         val quality = this.selectFirst("span.quality")?.text()?.trim()
-
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = posterUrl
-            if (!quality.isNullOrEmpty()) addQuality(quality)
-            this.score = score
+            if (quality != null && quality.isNotEmpty()) addQuality(quality)
+            this.score = Score.from10(ratingText?.toDoubleOrNull())
         }
+    }
+
+    override suspend fun search(query: String): List<SearchResponse> {
+        val document = app.get("$mainUrl?s=$query&post_type[]=post&post_type[]=tv", timeout = 50L).document
+        return document.select("article.item").mapNotNull { it.toSearchResult() }
     }
 
     private fun Element.toRecommendResult(): SearchResponse? {
@@ -59,36 +61,24 @@ class Filmapik : MainAPI() {
         val img = a.selectFirst("img[src][alt]") ?: return null
         val title = img.attr("alt").trim()
         val posterUrl = fixUrlNull(img.attr("src")).fixImageQuality()
-        return newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = posterUrl }
-    }
-
-    override suspend fun search(query: String): List<SearchResponse> {
-        val document =
-            app.get("$mainUrl?s=$query&post_type[]=post&post_type[]=tv", timeout = 50L).document
-        return document.select("article.item").mapNotNull { it.toSearchResult() }
+        return newMovieSearchResponse(title, href, TvType.Movie) {
+            this.posterUrl = posterUrl
+        }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
-        val title = document.selectFirst("h1[itemprop=name]")?.text()
-            ?.replace("Nonton", "")
-            ?.replace("Sub Indo Filmapik", "")
-            ?.replace("Subtitle Indonesia Filmapik", "")
-            ?.trim() ?: return newMovieLoadResponse("", url, TvType.Movie, url)
-
+        val title = document.selectFirst("h1[itemprop=name]")?.text()?.replace("Nonton", "")?.trim() ?: return newMovieLoadResponse("", url, TvType.Movie, url)
         val poster = document.selectFirst("div.poster img")?.attr("src")?.let { fixUrl(it) }
         val tags = document.select("span.sgeneros a").map { it.text() }
         val actors = document.select("span.tagline:contains(Stars:) a").map { it.text() }
-        val seriesStatus = document.select("div.info-more:contains(Series Status:)").text()
         val year = Regex("(19|20)\\d{2}").find(title)?.value?.toIntOrNull()
-        val rating = document.selectFirst("div.sbox b:contains(IMDb)")?.nextElementSibling()?.text()?.toDoubleOrNull()
         val description = document.selectFirst("div#description, div[itemprop=description]")?.text()?.trim()
         val recommendations = document.select("#single_relacionados article").mapNotNull { it.toRecommendResult() }
 
-        val isSeries = document.select("div#episodes").isNotEmpty()
-
-        return if (isSeries) {
-            val episodes = document.select("div#episodes ul.episodios li a").mapIndexed { index, ep ->
+        val episodeDiv = document.selectFirst("div#episodes")
+        if (episodeDiv != null) {
+            val episodes = episodeDiv.select("ul.episodios li a").mapIndexed { index, ep ->
                 val href = fixUrl(ep.attr("href"))
                 val name = ep.text().ifBlank { "Episode ${index + 1}" }
                 newEpisode(href) {
@@ -96,8 +86,7 @@ class Filmapik : MainAPI() {
                     this.episode = index + 1
                 }
             }
-
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
                 this.tags = tags
@@ -106,7 +95,7 @@ class Filmapik : MainAPI() {
                 this.recommendations = recommendations
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, url) {
+            return newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = poster
                 this.year = year
                 this.tags = tags
@@ -117,24 +106,16 @@ class Filmapik : MainAPI() {
         }
     }
 
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
+    override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val document = app.get(data).document
-
         document.select("div.cframe iframe, iframe.metaframe").forEach { iframe ->
             val src = iframe.attr("src")
             if (src.isNotBlank()) loadExtractor(httpsify(src), data, subtitleCallback, callback)
         }
-
         document.select("div.links_table a.myButton").forEach { linkEl ->
             val downloadUrl = linkEl.attr("href")
             if (downloadUrl.isNotBlank()) loadExtractor(downloadUrl, data, subtitleCallback, callback)
         }
-
         return true
     }
 
@@ -144,16 +125,11 @@ class Filmapik : MainAPI() {
         return this.replace(regex, "")
     }
 
-    private fun getBaseUrl(url: String): String {
-        return URI(url).let { "${it.scheme}://${it.host}" }
-    }
-
     private fun fixUrl(url: String): String {
-        return if (url.startsWith("/")) mainUrl + url else url
+        return if (url.startsWith("http")) url else "$mainUrl$url"
     }
 
     private fun fixUrlNull(url: String?): String? {
-        if (url == null) return null
-        return if (url.startsWith("/")) mainUrl + url else url
+        return url?.let { fixUrl(it) }
     }
 }
