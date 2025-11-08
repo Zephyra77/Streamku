@@ -10,6 +10,5 @@ class FilmapikPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(Filmapik())
         registerExtractorAPI(EfekStream())
-        registerExtractorAPI(ShortIcu())
     }
 }
