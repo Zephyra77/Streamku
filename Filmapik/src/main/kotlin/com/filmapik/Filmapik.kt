@@ -12,7 +12,6 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 
 class Filmapik : MainAPI() {
-
     override var mainUrl = "https://filmapik.singles"
     override var name = "Filmapik"
     override val hasMainPage = true
@@ -126,25 +125,41 @@ class Filmapik : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-        val playerOptions = document.select("li.dooplay_player_option[data-url]")
-        playerOptions.forEach { option ->
-            val url = option.attr("data-url").trim()
-            if (url.isNotEmpty()) {
-                loadExtractor(httpsify(url), data, subtitleCallback, callback)
+        document.select("li.dooplay_player_option[data-url]").forEach { el ->
+            val link = el.attr("data-url").trim()
+            if (link.isNotEmpty() && link != "about:blank") {
+                loadExtractor(httpsify(link), data, subtitleCallback, callback)
             }
         }
-        val iframeList = document.select("iframe.metaframe, iframe[src]")
-        iframeList.forEach { frame ->
-            val src = frame.attr("src").trim()
+        document.select("iframe.metaframe, iframe[src]").forEach { el ->
+            val src = el.attr("src").trim()
             if (src.isNotEmpty() && src != "about:blank") {
                 loadExtractor(httpsify(src), data, subtitleCallback, callback)
             }
         }
-        val downloadList = document.select("div.links_table a.myButton[href]")
-        downloadList.forEach { dl ->
-            val href = dl.attr("href").trim()
-            if (href.isNotEmpty()) {
+        document.select("div#download a.myButton[href]").forEach { el ->
+            val href = el.attr("href").trim()
+            if (href.isNotEmpty() && href != "about:blank") {
                 loadExtractor(httpsify(href), data, subtitleCallback, callback)
+            }
+        }
+        document.select("div#playeroptions li[data-post][data-nume][data-type]").forEach { el ->
+            val post = el.attr("data-post")
+            val nume = el.attr("data-nume")
+            val type = el.attr("data-type")
+            if (post.isNotEmpty() && nume.isNotEmpty()) {
+                val ajaxUrl = "$mainUrl/wp-admin/admin-ajax.php"
+                val body = mapOf(
+                    "action" to "doo_player_ajax",
+                    "post" to post,
+                    "nume" to nume,
+                    "type" to type
+                )
+                val ajaxResponse = app.post(ajaxUrl, data = body).text
+                val iframeSrc = Regex("""src=['"]([^'"]+)['"]""").find(ajaxResponse)?.groupValues?.get(1)
+                if (!iframeSrc.isNullOrEmpty()) {
+                    loadExtractor(httpsify(iframeSrc), data, subtitleCallback, callback)
+                }
             }
         }
         return true
