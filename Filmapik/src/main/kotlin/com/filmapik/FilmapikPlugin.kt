@@ -4,8 +4,6 @@ package com.filmapik
 import android.content.Context
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.plugins.Plugin
-import com.filmapik.extractors.EfekStream
-import com.filmapik.extractors.ShortIcu
 
 @CloudstreamPlugin
 class FilmapikPlugin : Plugin() {
