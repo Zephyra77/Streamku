@@ -1,6 +1,5 @@
 package com.filmapik
 
-import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -16,7 +15,7 @@ class EfekStream : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
+        subtitleCallback: (com.lagradost.cloudstream3.utils.SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val html = try { app.get(url, referer = referer).text } catch (_: Exception) { return }
@@ -50,7 +49,7 @@ class EfekStream : ExtractorApi() {
                     val full = base.trimEnd('/') + rel
                     try {
                         val r = app.head(full, referer = url)
-                        if (r.status.value in 200..299) {
+                        if (r.code in 200..299) {
                             fileUrl = full
                             break
                         }
@@ -69,7 +68,7 @@ class EfekStream : ExtractorApi() {
                         try {
                             val candidate = h.trimEnd('/') + fileUrl
                             val r = app.head(candidate, referer = url)
-                            if (r.status.value in 200..299) candidate else null
+                            if (r.code in 200..299) candidate else null
                         } catch (_: Exception) { null }
                     } ?: (mainUrl + fileUrl)
                 }
