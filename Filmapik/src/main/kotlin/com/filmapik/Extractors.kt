@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.newSubtitleFile
 
 class EfekStream : ExtractorApi() {
     override val name = "EfekStream"
@@ -14,30 +15,27 @@ class EfekStream : ExtractorApi() {
 
     override suspend fun getUrl(
         url: String,
-        referer: String?,
+        referer: String? = null,
         subtitleCallback: (com.lagradost.cloudstream3.utils.SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val html = try { app.get(url, referer = referer).text } catch (_: Exception) { return }
 
-        var fileUrl: String? = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""", RegexOption.IGNORE_CASE)
-            .find(html)?.value
+        var fileUrl: String? = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").find(html)?.value
 
         if (fileUrl == null) {
-            val jsUrls = Regex("""<script[^>]+src=["'](https?://[^"']+)["']""", RegexOption.IGNORE_CASE)
-                .findAll(html).map { it.groupValues[1] }.toList()
+            val jsUrls = Regex("""<script[^>]+src=["'](https?://[^"']+)["']""").findAll(html).map { it.groupValues[1] }
             for (js in jsUrls) {
                 val jsContent = try { app.get(js, referer = url).text } catch (_: Exception) { null }
                 if (jsContent != null) {
-                    fileUrl = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""", RegexOption.IGNORE_CASE)
-                        .find(jsContent)?.value
+                    fileUrl = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").find(jsContent)?.value
                     if (fileUrl != null) break
                 }
             }
         }
 
         if (fileUrl == null) {
-            val rel = Regex("""(/stream/[^\s"'<>]+)""", RegexOption.IGNORE_CASE).find(html)?.groupValues?.get(1)
+            val rel = Regex("""(/stream/[^\s"'<>]+)""").find(html)?.groupValues?.get(1)
             if (rel != null) {
                 val candidates = listOf(
                     "https://v3.goodnews.homes",
@@ -49,7 +47,7 @@ class EfekStream : ExtractorApi() {
                     val full = base.trimEnd('/') + rel
                     try {
                         val r = app.head(full, referer = url)
-                        if (r.code in 200..299) {
+                        if (r.status.value in 200..299) {
                             fileUrl = full
                             break
                         }
@@ -68,7 +66,7 @@ class EfekStream : ExtractorApi() {
                         try {
                             val candidate = h.trimEnd('/') + fileUrl
                             val r = app.head(candidate, referer = url)
-                            if (r.code in 200..299) candidate else null
+                            if (r.status.value in 200..299) candidate else null
                         } catch (_: Exception) { null }
                     } ?: (mainUrl + fileUrl)
                 }
