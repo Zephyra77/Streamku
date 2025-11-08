@@ -1,6 +1,6 @@
 package com.filmapik
 
-import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.MainExtractor
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.SubtitleFile
@@ -76,13 +76,10 @@ class EfekStream : MainExtractor() {
         } else fileUrl
 
         callback(
-            newExtractorLink(
-                source = name,
-                name = name,
-                url = finalUrl,
-                referer = referer ?: url,
-                quality = Qualities.Unknown.value
-            )
+            newExtractorLink(name, name, finalUrl) {
+                this.referer = referer ?: url
+                this.quality = Qualities.Unknown.value
+            }
         )
     }
 }
