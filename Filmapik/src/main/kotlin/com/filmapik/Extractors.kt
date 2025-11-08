@@ -3,7 +3,6 @@ package com.filmapik
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.SubtitleFile
-import java.net.URI
 
 class EfekStream : ExtractorApi() {
     override val name = "EfekStream"
@@ -47,12 +46,12 @@ class EfekStream : ExtractorApi() {
                     val full = base.trimEnd('/') + rel
                     try {
                         val resp = app.head(full, referer = url)
-                        if (resp.responseCode == 200) {
+                        if (resp.status == 200) {
                             fileUrl = full
                             break
                         }
                         val ct = resp.headers["content-type"] ?: ""
-                        if (resp.responseCode in 200..299 && (ct.contains("mpegurl", true) || ct.contains("application/vnd.apple.mpegurl", true) || ct.contains("video", true))) {
+                        if (resp.status in 200..299 && (ct.contains("mpegurl", true) || ct.contains("application/vnd.apple.mpegurl", true) || ct.contains("video", true))) {
                             fileUrl = full
                             break
                         }
@@ -63,7 +62,7 @@ class EfekStream : ExtractorApi() {
                         val full = base.trimEnd('/') + rel
                         try {
                             val resp = app.get(full, referer = url)
-                            if (resp.responseCode == 200) {
+                            if (resp.status == 200) {
                                 fileUrl = full
                                 break
                             }
@@ -83,7 +82,7 @@ class EfekStream : ExtractorApi() {
                         try {
                             val candidate = h.trimEnd('/') + fileUrl
                             val r = app.head(candidate, referer = url)
-                            if (r.responseCode == 200) candidate else null
+                            if (r.status == 200) candidate else null
                         } catch (_: Exception) { null }
                     } ?: (mainUrl + fileUrl)
                 }
