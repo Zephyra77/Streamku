@@ -7,11 +7,9 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.httpsify
-import com.lagradost.cloudstream3.utils.loadExtractor
-import com.filmapik.extractors.EfekStream
-import com.filmapik.extractors.ShortIcu
 import org.jsoup.nodes.Element
+import com.filmapik.EfekStream
+import com.filmapik.ShortIcu
 
 class Filmapik : MainAPI() {
 
