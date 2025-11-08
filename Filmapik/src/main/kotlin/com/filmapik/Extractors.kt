@@ -1,10 +1,9 @@
 package com.filmapik
 
-import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.SubtitleFile
 import com.lagradost.cloudstream3.utils.Qualities
-import java.net.URI
+import com.lagradost.cloudstream3.utils.SubtitleFile
 
 class EfekStream : ExtractorApi() {
     override val name = "EfekStream"
@@ -60,20 +59,14 @@ class EfekStream : ExtractorApi() {
         if (fileUrl == null) return
 
         val finalUrl = if (fileUrl.startsWith("/")) {
-            val host = when {
-                fileUrl.startsWith("/stream/") -> {
-                    val tryHost = listOf("https://v3.goodnews.homes", "https://v2.efek.stream", "https://fa.efek.stream")
-                    tryHost.firstNotNullOfOrNull { h ->
-                        try {
-                            val candidate = h.trimEnd('/') + fileUrl
-                            val r = app.head(candidate, referer = url)
-                            if (r.status.value in 200..299) candidate else null
-                        } catch (_: Exception) { null }
-                    } ?: (mainUrl + fileUrl)
-                }
-                else -> mainUrl + fileUrl
-            }
-            host
+            val tryHost = listOf("https://v3.goodnews.homes", "https://v2.efek.stream", "https://fa.efek.stream")
+            tryHost.firstNotNullOfOrNull { h ->
+                try {
+                    val candidate = h.trimEnd('/') + fileUrl
+                    val r = app.head(candidate, referer = url)
+                    if (r.status.value in 200..299) candidate else null
+                } catch (_: Exception) { null }
+            } ?: (mainUrl + fileUrl)
         } else fileUrl
 
         callback(
