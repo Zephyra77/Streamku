@@ -11,7 +11,6 @@ import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 import com.filmapik.EfekStream
-import com.filmapik.ShortIcu
 
 class Filmapik : MainAPI() {
 
@@ -127,24 +126,18 @@ class Filmapik : MainAPI() {
         document.select("li.dooplay_player_option[data-url]").forEach { el ->
             val link = el.attr("data-url").trim()
             if (link.isNotEmpty() && link != "about:blank") {
-                val extractor = when {
-                    link.contains("efek.stream") -> EfekStream()
-                    link.contains("short.icu") -> ShortIcu()
-                    else -> null
+                if (link.contains("efek.stream")) {
+                    EfekStream().getUrl(link, data, subtitleCallback, callback)
                 }
-                extractor?.getUrl(link, data, subtitleCallback, callback)
             }
         }
 
         document.select("div#download a.myButton[href]").forEach { el ->
             val href = el.attr("href").trim()
             if (href.isNotEmpty() && href != "about:blank") {
-                val extractor = when {
-                    href.contains("efek.stream") -> EfekStream()
-                    href.contains("short.icu") -> ShortIcu()
-                    else -> null
+                if (href.contains("efek.stream")) {
+                    EfekStream().getUrl(href, data, subtitleCallback, callback)
                 }
-                extractor?.getUrl(href, data, subtitleCallback, callback)
             }
         }
 
