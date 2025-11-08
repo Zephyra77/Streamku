@@ -15,51 +15,46 @@ class EfekStream : ExtractorApi() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val html = app.get(url, referer = referer).text
-        val jsUrls = Regex("""<script[^>]+src=["'](.*?\.js[^"']*)["']""").findAll(html)
-            .map { it.groupValues[1] }.toList()
+        val html = try { app.get(url, referer = referer).text } catch (_: Exception) { return }
 
-        var fileUrl: String? = null
-        for (js in jsUrls) {
-            val jsContent = try { app.get(js, referer = url).text } catch(e: Exception) { continue }
-            fileUrl = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").find(jsContent)?.value
-            if (fileUrl != null) break
+        var fileUrl = Regex("""https?://[^\s"'<>]+\.(m3u8|mp4)""", RegexOption.IGNORE_CASE)
+            .find(html)?.value
+
+        if (fileUrl == null) {
+            val rel = Regex("""(/stream/[^\s"'<>]+)""").find(html)?.groupValues?.get(1)
+            if (rel != null) {
+                val hosts = listOf(
+                    "https://v2.efek.stream",
+                    "https://v3.efek.stream",
+                    "https://v3.goodnews.homes",
+                    "https://fa.efek.stream"
+                )
+                for (host in hosts) {
+                    val candidate = host.trimEnd('/') + rel
+                    try {
+                        val resp = app.head(candidate, referer = url)
+                        val ct = resp.headers["content-type"] ?: ""
+                        if (resp.status in 200..299 && (ct.contains("mpegurl", true) || ct.contains("video", true))) {
+                            fileUrl = candidate
+                            break
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
         }
-        if (fileUrl == null) fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
+
         if (fileUrl == null) return
 
         callback(
-            ExtractorLink(name, name, fileUrl, url, Qualities.Unknown.value, type = ExtractorLinkType.M3U8)
-        )
-    }
-}
-
-class ShortIcu : ExtractorApi() {
-    override val name = "ShortIcu"
-    override val mainUrl = "https://short.icu"
-    override val requiresReferer = false
-
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val html = app.get(url, referer = referer).text
-        val jsUrls = Regex("""<script[^>]+src=["'](.*?\.js[^"']*)["']""").findAll(html)
-            .map { it.groupValues[1] }.toList()
-
-        var fileUrl: String? = null
-        for (js in jsUrls) {
-            val jsContent = try { app.get(js, referer = url).text } catch(e: Exception) { continue }
-            fileUrl = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").find(jsContent)?.value
-            if (fileUrl != null) break
-        }
-        if (fileUrl == null) fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
-        if (fileUrl == null) return
-
-        callback(
-            ExtractorLink(name, name, fileUrl, url, Qualities.Unknown.value, type = ExtractorLinkType.M3U8)
+            ExtractorLink(
+                name,
+                name,
+                fileUrl,
+                url,
+                Qualities.Unknown.value
+            ).apply {
+                referer = referer ?: url
+            }
         )
     }
 }
