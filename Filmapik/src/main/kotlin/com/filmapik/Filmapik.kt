@@ -33,16 +33,14 @@ class Filmapik : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val data = request.data.format(page)
-        val document = app.get("$mainUrl/$data").document
-        val home = document.select("div.items.normal article.item").mapNotNull {
-            it.toSearchResult()
-        }
-        return newHomePageResponse(request.name, home)
+        val url = "$mainUrl/${request.data.format(page)}"
+        val document = app.get(url).document
+        val items = document.select("div.items.normal article.item").mapNotNull { it.toSearchResult() }
+        return newHomePageResponse(request.name, items)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val a = selectFirst("a[href][title]") ?: return null
+        val a = selectFirst("a[title][href]") ?: return null
         val title = a.attr("title").trim()
         val href = fixUrl(a.attr("href"))
         val poster = fixUrlNull(selectFirst("img[src]")?.attr("src")).fixImageQuality()
@@ -58,15 +56,12 @@ class Filmapik : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val document = app.get("$mainUrl?s=$query&post_type[]=post&post_type[]=tv").document
-        return document.select("article.item").mapNotNull {
-            it.toSearchResult()
-        }
+        return document.select("article.item").mapNotNull { it.toSearchResult() }
     }
 
     private fun Element.toRecommendResult(): SearchResponse? {
         val a = selectFirst("a[href]") ?: return null
         val img = a.selectFirst("img[src][alt]") ?: return null
-
         val href = fixUrl(a.attr("href"))
         val title = img.attr("alt").trim()
         val poster = fixUrlNull(img.attr("src")).fixImageQuality()
@@ -86,31 +81,42 @@ class Filmapik : MainAPI() {
         val poster = document.selectFirst(".sheader .poster img")
             ?.attr("src")?.let { fixUrl(it) }
 
-        val tags = document.select("span.sgeneros a").map { it.text() }
-        val actors = document.select("#info .tagline:contains(Stars:) a").map { it.text() }
-        val year = document.selectFirst("#info .country a")?.text()?.toIntOrNull()
-        val description = document.selectFirst("#info .info-more")?.text()?.trim()
+        val genres = document.select("#info .info-more span.sgeneros a").map { it.text() }
+        val actors = document.select("#info .info-more span.tagline:contains(Stars) a").map { it.text() }
+        val description = document.selectFirst("#info .info-more:nth-of-type(1)")?.text()?.trim()
+        val year = document.selectFirst("#info .info-more .country a")?.text()?.toIntOrNull()
 
-        val recommendations = document.select("#single_relacionados article").mapNotNull {
-            it.toRecommendResult()
-        }
+        val recommendations = document.select("#single_relacionados article")
+            .mapNotNull { it.toRecommendResult() }
 
-        val episodeList = document.select("#episodes ul.episodios li a")
+        val seasonBlocks = document.select("#seasons .se-c")
 
-        if (episodeList.isNotEmpty()) {
-            val episodes = episodeList.mapIndexed { index, ep ->
-                val href = fixUrl(ep.attr("href"))
-                val name = ep.text().ifBlank { "Episode ${index + 1}" }
-                newEpisode(href) {
-                    this.name = name
-                    this.episode = index + 1
+        if (seasonBlocks.isNotEmpty()) {
+
+            val episodes = mutableListOf<Episode>()
+
+            seasonBlocks.forEach { block ->
+                val seasonNum = block.selectFirst(".se-q .se-t")?.text()?.toIntOrNull() ?: 1
+
+                val epList = block.select(".se-a ul.episodios li a")
+                epList.forEachIndexed { index, ep ->
+                    val href = fixUrl(ep.attr("href"))
+                    val epName = ep.text().ifBlank { "Episode ${index + 1}" }
+
+                    episodes.add(
+                        newEpisode(href) {
+                            this.name = epName
+                            this.season = seasonNum
+                            this.episode = index + 1
+                        }
+                    )
                 }
             }
 
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
-                this.tags = tags
+                this.tags = genres
                 addActors(actors)
                 this.plot = description
                 this.recommendations = recommendations
@@ -120,7 +126,7 @@ class Filmapik : MainAPI() {
         return newMovieLoadResponse(title, url, TvType.Movie, url) {
             this.posterUrl = poster
             this.year = year
-            this.tags = tags
+            this.tags = genres
             addActors(actors)
             this.plot = description
             this.recommendations = recommendations
@@ -136,8 +142,8 @@ class Filmapik : MainAPI() {
 
         val document = app.get(data).document
 
-        val iframeLinks = document.select("div.cframe iframe, iframe.metaframe")
-        iframeLinks.forEach { frame ->
+        val iframeList = document.select("div.cframe iframe, iframe.metaframe")
+        iframeList.forEach { frame ->
             val src = frame.attr("src").trim()
             if (src.isNotEmpty()) {
                 loadExtractor(
@@ -149,8 +155,8 @@ class Filmapik : MainAPI() {
             }
         }
 
-        val downloadLinks = document.select("div.links_table a.myButton")
-        downloadLinks.forEach { dl ->
+        val downloadList = document.select("div.links_table a.myButton")
+        downloadList.forEach { dl ->
             val href = dl.attr("href").trim()
             if (href.isNotEmpty()) {
                 loadExtractor(
