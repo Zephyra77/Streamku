@@ -46,7 +46,6 @@ class Filmapik : MainAPI() {
         val poster = fixUrlNull(selectFirst("img[src]")?.attr("src")).fixImageQuality()
         val rating = selectFirst("div.rating")?.ownText()?.trim()?.toDoubleOrNull()
         val quality = selectFirst("span.quality")?.text()?.trim()
-
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = poster
             if (!quality.isNullOrBlank()) addQuality(quality)
@@ -65,54 +64,42 @@ class Filmapik : MainAPI() {
         val href = fixUrl(a.attr("href"))
         val title = img.attr("alt").trim()
         val poster = fixUrlNull(img.attr("src")).fixImageQuality()
-
-        return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = poster
-        }
+        return newMovieSearchResponse(title, href, TvType.Movie) { this.posterUrl = poster }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
-
-        val title = document.selectFirst("#info h2")?.text()?.trim()
-            ?: document.selectFirst("h1[itemprop=name]")?.text()?.trim()
+        val title = document.selectFirst("h1[itemprop=name], .sheader h1, .sheader h2")?.text()?.trim()
+            ?: document.selectFirst("#info h2")?.text()?.trim()
             ?: ""
-
-        val poster = document.selectFirst(".sheader .poster img")
-            ?.attr("src")?.let { fixUrl(it) }
-
+        val poster = document.selectFirst(".sheader .poster img")?.attr("src")?.let { fixUrl(it) }
         val genres = document.select("#info .info-more span.sgeneros a").map { it.text() }
         val actors = document.select("#info .info-more span.tagline:contains(Stars) a").map { it.text() }
-        val description = document.selectFirst("#info .info-more:nth-of-type(1)")?.text()?.trim()
+        val description = document.selectFirst("div[itemprop=description], .wp-content, .entry-content, .desc, .entry")?.text()?.trim()
+            ?: document.selectFirst("#info .info-more:nth-of-type(1)")?.text()?.trim()
+            ?: "Tidak ada deskripsi."
         val year = document.selectFirst("#info .info-more .country a")?.text()?.toIntOrNull()
-
-        val recommendations = document.select("#single_relacionados article")
-            .mapNotNull { it.toRecommendResult() }
-
+        val recommendations = document.select("#single_relacionados article").mapNotNull { it.toRecommendResult() }
         val seasonBlocks = document.select("#seasons .se-c")
 
         if (seasonBlocks.isNotEmpty()) {
-
             val episodes = mutableListOf<Episode>()
-
             seasonBlocks.forEach { block ->
                 val seasonNum = block.selectFirst(".se-q .se-t")?.text()?.toIntOrNull() ?: 1
-
                 val epList = block.select(".se-a ul.episodios li a")
                 epList.forEachIndexed { index, ep ->
                     val href = fixUrl(ep.attr("href"))
                     val epName = ep.text().ifBlank { "Episode ${index + 1}" }
-
                     episodes.add(
                         newEpisode(href) {
                             this.name = epName
                             this.season = seasonNum
                             this.episode = index + 1
+                            this.plot = description
                         }
                     )
                 }
             }
-
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
@@ -139,35 +126,17 @@ class Filmapik : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-
         val document = app.get(data).document
-
         val iframeList = document.select("div.cframe iframe, iframe.metaframe")
         iframeList.forEach { frame ->
             val src = frame.attr("src").trim()
-            if (src.isNotEmpty()) {
-                loadExtractor(
-                    httpsify(src),
-                    data,
-                    subtitleCallback,
-                    callback
-                )
-            }
+            if (src.isNotEmpty()) loadExtractor(httpsify(src), data, subtitleCallback, callback)
         }
-
         val downloadList = document.select("div.links_table a.myButton")
         downloadList.forEach { dl ->
             val href = dl.attr("href").trim()
-            if (href.isNotEmpty()) {
-                loadExtractor(
-                    href,
-                    data,
-                    subtitleCallback,
-                    callback
-                )
-            }
+            if (href.isNotEmpty()) loadExtractor(href, data, subtitleCallback, callback)
         }
-
         return true
     }
 
