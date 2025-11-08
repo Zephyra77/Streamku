@@ -1,11 +1,11 @@
 package com.filmapik
 
-import com.lagradost.cloudstream3.utils.ExtractorApi
+import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.SubtitleFile
 
-class EfekStream : ExtractorApi() {
+class EfekStream : MainExtractor() {
     override val name = "EfekStream"
     override val mainUrl = "https://v2.efek.stream"
     override val requiresReferer = false
@@ -59,21 +59,30 @@ class EfekStream : ExtractorApi() {
         if (fileUrl == null) return
 
         val finalUrl = if (fileUrl.startsWith("/")) {
-            val tryHost = listOf("https://v3.goodnews.homes", "https://v2.efek.stream", "https://fa.efek.stream")
-            tryHost.firstNotNullOfOrNull { h ->
-                try {
-                    val candidate = h.trimEnd('/') + fileUrl
-                    val r = app.head(candidate, referer = url)
-                    if (r.status.value in 200..299) candidate else null
-                } catch (_: Exception) { null }
-            } ?: (mainUrl + fileUrl)
+            val host = when {
+                fileUrl.startsWith("/stream/") -> {
+                    val tryHost = listOf("https://v3.goodnews.homes", "https://v2.efek.stream", "https://fa.efek.stream")
+                    tryHost.firstNotNullOfOrNull { h ->
+                        try {
+                            val candidate = h.trimEnd('/') + fileUrl
+                            val r = app.head(candidate, referer = url)
+                            if (r.status.value in 200..299) candidate else null
+                        } catch (_: Exception) { null }
+                    } ?: (mainUrl + fileUrl)
+                }
+                else -> mainUrl + fileUrl
+            }
+            host
         } else fileUrl
 
         callback(
-            newExtractorLink(name, name, finalUrl) {
-                this.referer = referer ?: url
-                this.quality = Qualities.Unknown.value
-            }
+            newExtractorLink(
+                source = name,
+                name = name,
+                url = finalUrl,
+                referer = referer ?: url,
+                quality = Qualities.Unknown.value
+            )
         )
     }
 }
