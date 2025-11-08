@@ -12,6 +12,7 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 
 class Filmapik : MainAPI() {
+
     override var mainUrl = "https://filmapik.singles"
     override var name = "Filmapik"
     override val hasMainPage = true
@@ -125,25 +126,8 @@ class Filmapik : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val document = app.get(data).document
-        document.select("li.dooplay_player_option[data-url]").forEach { el ->
-            val link = el.attr("data-url").trim()
-            if (link.isNotEmpty() && link != "about:blank") {
-                loadExtractor(httpsify(link), data, subtitleCallback, callback)
-            }
-        }
-        document.select("iframe.metaframe, iframe[src]").forEach { el ->
-            val src = el.attr("src").trim()
-            if (src.isNotEmpty() && src != "about:blank") {
-                loadExtractor(httpsify(src), data, subtitleCallback, callback)
-            }
-        }
-        document.select("div#download a.myButton[href]").forEach { el ->
-            val href = el.attr("href").trim()
-            if (href.isNotEmpty() && href != "about:blank") {
-                loadExtractor(httpsify(href), data, subtitleCallback, callback)
-            }
-        }
-        document.select("div#playeroptions li[data-post][data-nume][data-type]").forEach { el ->
+
+        document.select("ul#playeroptionsul li[data-nume][data-post][data-type]").forEach { el ->
             val post = el.attr("data-post")
             val nume = el.attr("data-nume")
             val type = el.attr("data-type")
@@ -155,13 +139,28 @@ class Filmapik : MainAPI() {
                     "nume" to nume,
                     "type" to type
                 )
-                val ajaxResponse = app.post(ajaxUrl, data = body).text
-                val iframeSrc = Regex("""src=['"]([^'"]+)['"]""").find(ajaxResponse)?.groupValues?.get(1)
+                val response = app.post(ajaxUrl, data = body).text
+                val iframeSrc = Regex("""src=['"]([^'"]+)['"]""").find(response)?.groupValues?.get(1)
                 if (!iframeSrc.isNullOrEmpty()) {
                     loadExtractor(httpsify(iframeSrc), data, subtitleCallback, callback)
                 }
             }
         }
+
+        document.select("iframe[src]").forEach { frame ->
+            val src = frame.attr("src").trim()
+            if (src.isNotEmpty() && src != "about:blank") {
+                loadExtractor(httpsify(src), data, subtitleCallback, callback)
+            }
+        }
+
+        document.select("a.myButton[href]").forEach { el ->
+            val href = el.attr("href").trim()
+            if (href.isNotEmpty()) {
+                loadExtractor(httpsify(href), data, subtitleCallback, callback)
+            }
+        }
+
         return true
     }
 
