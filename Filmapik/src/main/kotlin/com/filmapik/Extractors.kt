@@ -11,6 +11,13 @@ class EfekStream : ExtractorApi() {
     override val mainUrl = "https://v2.efek.stream"
     override val requiresReferer = false
 
+    private val hosts = listOf(
+        "https://v3.goodnews.homes",
+        "https://v3.efek.stream",
+        "https://fa.efek.stream",
+        "https://v2.efek.stream"
+    )
+
     override suspend fun getUrl(
         url: String,
         referer: String?,
@@ -19,28 +26,36 @@ class EfekStream : ExtractorApi() {
     ) {
         val html = try { app.get(url, referer = referer).text } catch (_: Exception) { return }
 
-        var fileUrl: String? = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""", RegexOption.IGNORE_CASE)
-            .find(html)?.value
+        var fileUrl = Regex("""https?://[^'"<>]+/stream/\d+/[^\s"'<>]+/__\d+""").find(html)?.value
 
         if (fileUrl == null) {
-            val jsUrls = Regex("""<script[^>]+src=["'](https?://[^"']+)["']""", RegexOption.IGNORE_CASE)
-                .findAll(html).map { it.groupValues[1] }.toList()
+            val jsUrls = Regex("""<script[^>]+src=["'](https?://[^"']+)["']""").findAll(html).map { it.groupValues[1] }
             for (js in jsUrls) {
                 val jsContent = try { app.get(js, referer = url).text } catch (_: Exception) { null }
                 if (jsContent != null) {
-                    fileUrl = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""", RegexOption.IGNORE_CASE)
-                        .find(jsContent)?.value
+                    fileUrl = Regex("""https?://[^'"<>]+/stream/\d+/[^\s"'<>]+/__\d+""").find(jsContent)?.value
                     if (fileUrl != null) break
+                }
+            }
+        }
+
+        if (fileUrl == null) {
+            val rel = Regex("""(/stream/[^\s"'<>]+/__\d+)""").find(html)?.groupValues?.get(1)
+            if (rel != null) {
+                fileUrl = hosts.firstNotNullOfOrNull { host ->
+                    try {
+                        val full = host.trimEnd('/') + rel
+                        val r = app.head(full, referer = url)
+                        if (r.status.value in 200..299) full else null
+                    } catch (_: Exception) { null }
                 }
             }
         }
 
         if (fileUrl == null) return
 
-        val finalUrl = if (fileUrl.startsWith("/")) mainUrl + fileUrl else fileUrl
-
         callback(
-            newExtractorLink(name, name, finalUrl) {
+            newExtractorLink(name, name, fileUrl) {
                 this.referer = referer ?: url
                 this.quality = Qualities.Unknown.value
             }
