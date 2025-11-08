@@ -16,14 +16,14 @@ class EfekStream : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val html = app.get(url, referer = referer).text
-        val fileUrl = Regex("""file\s*:\s*["'](.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
+        val fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
             ?: Regex("""sources\s*:\s*\[\s*\{\s*"file"\s*:\s*"([^"]+)"""").find(html)?.groupValues?.get(1)
             ?: return
 
         callback(
             ExtractorLink(
-                this.name,
-                this.name,
+                name,
+                name,
                 fileUrl,
                 url,
                 Qualities.Unknown.value,
@@ -45,14 +45,14 @@ class ShortIcu : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val html = app.get(url, referer = referer).text
-        val fileUrl = Regex("""file\s*:\s*["'](.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
+        val fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
             ?: Regex("""sources\s*:\s*\[\s*\{\s*"file"\s*:\s*"([^"]+)"""").find(html)?.groupValues?.get(1)
             ?: return
 
         callback(
             ExtractorLink(
-                this.name,
-                this.name,
+                name,
+                name,
                 fileUrl,
                 url,
                 Qualities.Unknown.value,
@@ -78,6 +78,18 @@ suspend fun MainAPI.loadMovieOrEpisodeLinks(
                 else -> null
             }
             extractor?.getUrl(link, url, subtitleCallback, callback)
+        }
+    }
+
+    document.select("div#download a.myButton[href]").forEach { el ->
+        val href = el.attr("href").trim()
+        if (href.isNotEmpty() && href != "about:blank") {
+            val extractor = when {
+                href.contains("efek.stream") -> EfekStream()
+                href.contains("short.icu") -> ShortIcu()
+                else -> null
+            }
+            extractor?.getUrl(href, url, subtitleCallback, callback)
         }
     }
 }
