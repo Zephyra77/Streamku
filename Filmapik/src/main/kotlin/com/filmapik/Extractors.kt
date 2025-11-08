@@ -1,9 +1,11 @@
 package com.filmapik
 
-import com.lagradost.cloudstream3.MainExtractor
+import com.lagradost.cloudstream3.SubtitleFile
+import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.newSubtitleFile
 import com.lagradost.cloudstream3.utils.newExtractorLink
 
 class EfekStream : ExtractorApi() {
@@ -14,10 +16,10 @@ class EfekStream : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (com.lagradost.cloudstream3.utils.SubtitleFile) -> Unit,
+        subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val html = try { client.get(url, referer = referer).text } catch (_: Exception) { return }
+        val html = try { app.get(url, referer = referer).text } catch (_: Exception) { return }
 
         var fileUrl: String? = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""", RegexOption.IGNORE_CASE)
             .find(html)?.value
@@ -26,7 +28,7 @@ class EfekStream : ExtractorApi() {
             val jsUrls = Regex("""<script[^>]+src=["'](https?://[^"']+)["']""", RegexOption.IGNORE_CASE)
                 .findAll(html).map { it.groupValues[1] }.toList()
             for (js in jsUrls) {
-                val jsContent = try { client.get(js, referer = url).text } catch (_: Exception) { null }
+                val jsContent = try { app.get(js, referer = url).text } catch (_: Exception) { null }
                 if (jsContent != null) {
                     fileUrl = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""", RegexOption.IGNORE_CASE)
                         .find(jsContent)?.value
@@ -47,7 +49,7 @@ class EfekStream : ExtractorApi() {
                 for (base in candidates) {
                     val full = base.trimEnd('/') + rel
                     try {
-                        val r = client.head(full, referer = url)
+                        val r = app.head(full, referer = url)
                         if (r.status.value in 200..299) {
                             fileUrl = full
                             break
@@ -66,7 +68,7 @@ class EfekStream : ExtractorApi() {
                     tryHost.firstNotNullOfOrNull { h ->
                         try {
                             val candidate = h.trimEnd('/') + fileUrl
-                            val r = client.head(candidate, referer = url)
+                            val r = app.head(candidate, referer = url)
                             if (r.status.value in 200..299) candidate else null
                         } catch (_: Exception) { null }
                     } ?: (mainUrl + fileUrl)
@@ -77,7 +79,7 @@ class EfekStream : ExtractorApi() {
         } else fileUrl
 
         callback(
-            newExtractorLink(name, name, finalUrl) {
+            newExtractorLink(name, name, finalUrl, ExtractorLinkType.M3U8) {
                 this.referer = referer ?: url
                 this.quality = Qualities.Unknown.value
             }
