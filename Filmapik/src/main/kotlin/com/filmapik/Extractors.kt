@@ -16,20 +16,20 @@ class EfekStream : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val html = app.get(url, referer = referer).text
+        val jsUrls = Regex("""<script[^>]+src=["'](.*?\.js[^"']*)["']""").findAll(html)
+            .map { it.groupValues[1] }.toList()
 
-        val fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
-            ?: Regex("""sources\s*:\s*\[\s*\{\s*"file"\s*:\s*"([^"]+)"""").find(html)?.groupValues?.get(1)
-            ?: return
+        var fileUrl: String? = null
+        for (js in jsUrls) {
+            val jsContent = try { app.get(js, referer = url).text } catch(e: Exception) { continue }
+            fileUrl = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").find(jsContent)?.value
+            if (fileUrl != null) break
+        }
+        if (fileUrl == null) fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
+        if (fileUrl == null) return
 
         callback(
-            ExtractorLink(
-                name,
-                name,
-                fileUrl,
-                url,
-                Qualities.Unknown.value,
-                type = ExtractorLinkType.M3U8
-            )
+            ExtractorLink(name, name, fileUrl, url, Qualities.Unknown.value, type = ExtractorLinkType.M3U8)
         )
     }
 }
@@ -46,20 +46,20 @@ class ShortIcu : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val html = app.get(url, referer = referer).text
+        val jsUrls = Regex("""<script[^>]+src=["'](.*?\.js[^"']*)["']""").findAll(html)
+            .map { it.groupValues[1] }.toList()
 
-        val fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
-            ?: Regex("""sources\s*:\s*\[\s*\{\s*"file"\s*:\s*"([^"]+)"""").find(html)?.groupValues?.get(1)
-            ?: return
+        var fileUrl: String? = null
+        for (js in jsUrls) {
+            val jsContent = try { app.get(js, referer = url).text } catch(e: Exception) { continue }
+            fileUrl = Regex("""https?://[^\s"'<>]+\.m3u8[^\s"'<>]*""").find(jsContent)?.value
+            if (fileUrl != null) break
+        }
+        if (fileUrl == null) fileUrl = Regex("""(https?://.*?\.m3u8.*?)["']""").find(html)?.groupValues?.get(1)
+        if (fileUrl == null) return
 
         callback(
-            ExtractorLink(
-                name,
-                name,
-                fileUrl,
-                url,
-                Qualities.Unknown.value,
-                type = ExtractorLinkType.M3U8
-            )
+            ExtractorLink(name, name, fileUrl, url, Qualities.Unknown.value, type = ExtractorLinkType.M3U8)
         )
     }
-                     }
+}
