@@ -4,7 +4,6 @@ import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.SubtitleFile
 import com.lagradost.cloudstream3.app
 
 class EfekStream : ExtractorApi() {
@@ -44,8 +43,8 @@ class EfekStream : ExtractorApi() {
                 fileUrl = hosts.firstNotNullOfOrNull { host ->
                     try {
                         val full = host.trimEnd('/') + rel
-                        val r = app.head(full, referer = url)
-                        if (r.status in 200..299) full else null
+                        app.head(full, referer = url) // kalau gagal throw exception
+                        full
                     } catch (_: Exception) { null }
                 }
             }
