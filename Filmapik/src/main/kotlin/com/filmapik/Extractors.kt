@@ -4,7 +4,7 @@ import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.SubtitleFile
+import com.lagradost.cloudstream3.utils.newSubtitleFile
 import com.lagradost.cloudstream3.app
 
 class EfekStream : ExtractorApi() {
@@ -21,11 +21,9 @@ class EfekStream : ExtractorApi() {
 
     override suspend fun getUrl(
         url: String,
-        referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val html = try { app.get(url, referer = referer).text } catch (_: Exception) { return }
+        referer: String?
+    ): List<ExtractorLink>? {
+        val html = try { app.get(url, referer = referer).text } catch (_: Exception) { return null }
 
         var fileUrl = Regex("""https?://[^'"<>]+/stream/\d+/[^\s"'<>]+/__\d+""").find(html)?.value
 
@@ -47,15 +45,15 @@ class EfekStream : ExtractorApi() {
                     try {
                         val full = host.trimEnd('/') + rel
                         val r = app.head(full, referer = url)
-                        if (r.status.value in 200..299) full else null
+                        if (r.statusCode in 200..299) full else null
                     } catch (_: Exception) { null }
                 }
             }
         }
 
-        if (fileUrl == null) return
+        if (fileUrl == null) return null
 
-        callback(
+        return listOf(
             newExtractorLink(name, name, fileUrl) {
                 this.referer = referer ?: url
                 this.quality = Qualities.Unknown.value
