@@ -46,7 +46,7 @@ class EfekStream : ExtractorApi() {
                     try {
                         val full = host.trimEnd('/') + rel
                         val r = app.head(full, referer = url)
-                        if (r.statusCode in 200..299) full else null
+                        if (r.status.value in 200..299) full else null
                     } catch (_: Exception) { null }
                 }
             }
