@@ -8,11 +8,9 @@ import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
 
 class Filmapik : MainAPI() {
-
     override var mainUrl = "https://filmapik.singles"
     override var name = "Filmapik"
     override val hasMainPage = true
@@ -65,14 +63,12 @@ class Filmapik : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
         val title = document.selectFirst("h1[itemprop=name], .sheader h1, .sheader h2")?.text()?.trim()
-            ?: document.selectFirst("#info h2")?.text()?.trim()
-            ?: ""
+            ?: document.selectFirst("#info h2")?.text()?.trim() ?: ""
         val poster = document.selectFirst(".sheader .poster img")?.attr("src")?.let { fixUrl(it) }
         val genres = document.select("#info .info-more span.sgeneros a").map { it.text() }
         val actors = document.select("#info .info-more span.tagline:contains(Stars) a").map { it.text() }
         val description = document.selectFirst("div[itemprop=description], .wp-content, .entry-content, .desc, .entry")?.text()?.trim()
-            ?: document.selectFirst("#info .info-more:nth-of-type(1)")?.text()?.trim()
-            ?: "Tidak ada deskripsi."
+            ?: document.selectFirst("#info .info-more:nth-of-type(1)")?.text()?.trim() ?: "Tidak ada deskripsi."
         val year = document.selectFirst("#info .info-more .country a")?.text()?.toIntOrNull()
         val recommendations = document.select("#single_relacionados article").mapNotNull { it.toRecommendResult() }
         val seasonBlocks = document.select("#seasons .se-c")
