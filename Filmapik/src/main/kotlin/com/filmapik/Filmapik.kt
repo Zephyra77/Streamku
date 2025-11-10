@@ -125,14 +125,20 @@ class Filmapik : MainAPI() {
         document.select("li.dooplay_player_option[data-url]").forEach { el ->
             val link = el.attr("data-url").trim()
             if (link.isNotEmpty() && link != "about:blank") {
-                val quality = el.selectFirst(".title")?.text()?.trim() ?: "DEFAULT"
+                val qualityText = el.selectFirst(".title")?.text()?.trim() ?: "DEFAULT"
+                val quality = when {
+                    "1080" in qualityText -> 1080
+                    "720" in qualityText -> 720
+                    "360" in qualityText -> 360
+                    else -> 0
+                }
                 callback(
-                    ExtractorLink(
-                        name = "Filmapik",
+                    newExtractorLink(
+                        source = "Filmapik",
+                        name = "Filmapik $qualityText",
                         url = link,
                         referer = data,
-                        quality = 720,
-                        headers = mapOf("Referer" to data)
+                        quality = quality
                     )
                 )
             }
@@ -143,12 +149,12 @@ class Filmapik : MainAPI() {
             if (link.isNotEmpty() && link != "about:blank") {
                 val title = el.text().trim()
                 callback(
-                    ExtractorLink(
+                    newExtractorLink(
+                        source = "Filmapik",
                         name = "Download - $title",
                         url = link,
                         referer = data,
-                        quality = 0,
-                        headers = mapOf("Referer" to data)
+                        quality = 0
                     )
                 )
             }
