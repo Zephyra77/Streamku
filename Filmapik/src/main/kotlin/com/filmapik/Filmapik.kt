@@ -7,6 +7,7 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
 
@@ -119,35 +120,40 @@ class Filmapik : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data).document
-
-        document.select("li.dooplay_player_option[data-url]").forEachIndexed { index, el ->
-            val link = el.attr("data-url").trim()
-            if (link.isEmpty() || link == "about:blank") return@forEachIndexed
-            val type = el.attr("data-type")
-            val titleText = el.selectFirst("span.title")?.text()?.trim() ?: ""
-            val serverName = when (type) {
-                "movie" -> "Movie Server ${index + 1} $titleText"
-                "tv" -> "Episode Server ${index + 1} $titleText"
-                else -> "Server ${index + 1} $titleText"
-            }
-            callback(newExtractorLink("Filmapik", serverName, link))
+        val doc = app.get(data).document
+        val links = mutableListOf<String>()
+        doc.select("li.dooplay_player_option[data-url]").forEach { el ->
+            el.attr("data-url").trim().let { if (it.isNotEmpty()) links.add(it) }
         }
-
-        document.select("div#download a.myButton[href]").forEachIndexed { index, el ->
-            val href = el.attr("href").trim()
-            if (href.isEmpty() || href == "about:blank") return@forEachIndexed
-            val serverName = "Download Link ${index + 1} ${el.text().trim()}"
-            callback(newExtractorLink("Filmapik", serverName, href))
+        doc.select("div#download a.myButton[href]").forEach { a ->
+            a.attr("href").trim().let { if (it.isNotEmpty()) links.add(it) }
         }
-
+        for (raw in links) {
+            val resolved = resolveIframe(raw)
+            loadExtractor(resolved, data, subtitleCallback, callback)
+        }
         return true
     }
 
     private suspend fun resolveIframe(url: String): String {
-        val doc = app.get(url).document
-        val iframe = doc.selectFirst("iframe[src]")
-        return iframe?.attr("src")?.trim() ?: url
+        val res = app.get(url, allowRedirects = true)
+        val doc = res.document
+        doc.selectFirst("iframe[src]")?.attr("src")?.trim()?.let {
+            if (it.startsWith("http")) return it
+        }
+        doc.select("meta[http-equiv=refresh]").forEach { meta ->
+            meta.attr("content")?.substringAfter("URL=")?.trim()?.let { refreshUrl ->
+                if (refreshUrl.startsWith("http")) return resolveIframe(refreshUrl)
+            }
+        }
+        val scripts = doc.select("script").html()
+        val regexJs = Regex("""location\.href\s*=\s*["'](.*?)["']""")
+        val match = regexJs.find(scripts)
+        if (match != null) {
+            val jsUrl = match.groupValues[1]
+            if (jsUrl.startsWith("http")) return resolveIframe(jsUrl)
+        }
+        return res.url
     }
 
     private fun String?.fixImageQuality(): String? {
