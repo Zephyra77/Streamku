@@ -10,7 +10,6 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.httpsify
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
-import com.filmapik.EfekStream
 
 class Filmapik : MainAPI() {
 
@@ -126,18 +125,32 @@ class Filmapik : MainAPI() {
         document.select("li.dooplay_player_option[data-url]").forEach { el ->
             val link = el.attr("data-url").trim()
             if (link.isNotEmpty() && link != "about:blank") {
-                if (link.contains("efek.stream")) {
-                    EfekStream().getUrl(link, data, subtitleCallback, callback)
-                }
+                val quality = el.selectFirst(".title")?.text()?.trim() ?: "DEFAULT"
+                callback(
+                    ExtractorLink(
+                        name = "Filmapik",
+                        url = link,
+                        referer = data,
+                        quality = 720,
+                        headers = mapOf("Referer" to data)
+                    )
+                )
             }
         }
 
         document.select("div#download a.myButton[href]").forEach { el ->
-            val href = el.attr("href").trim()
-            if (href.isNotEmpty() && href != "about:blank") {
-                if (href.contains("efek.stream")) {
-                    EfekStream().getUrl(href, data, subtitleCallback, callback)
-                }
+            val link = el.attr("href").trim()
+            if (link.isNotEmpty() && link != "about:blank") {
+                val title = el.text().trim()
+                callback(
+                    ExtractorLink(
+                        name = "Download - $title",
+                        url = link,
+                        referer = data,
+                        quality = 0,
+                        headers = mapOf("Referer" to data)
+                    )
+                )
             }
         }
 
