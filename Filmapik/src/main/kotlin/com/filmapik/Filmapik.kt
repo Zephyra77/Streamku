@@ -124,7 +124,6 @@ class Filmapik : MainAPI() {
         document.select("li.dooplay_player_option[data-url]").forEachIndexed { index, el ->
             val link = el.attr("data-url").trim()
             if (link.isEmpty() || link == "about:blank") return@forEachIndexed
-
             val type = el.attr("data-type")
             val titleText = el.selectFirst("span.title")?.text()?.trim() ?: ""
             val serverName = when (type) {
@@ -132,37 +131,14 @@ class Filmapik : MainAPI() {
                 "tv" -> "Episode Server ${index + 1} $titleText"
                 else -> "Server ${index + 1} $titleText"
             }
-
-            when {
-                link.contains("efek.stream") -> {
-                    EfekStream().getUrl(link, data, subtitleCallback) { extractedLink ->
-                        callback(extractedLink)
-                    }
-                }
-                link.contains("filemoon") || link.contains("buzzheavier") -> {
-                    val resolved = resolveIframe(link)
-                    callback(newExtractorLink("Filmapik", serverName, resolved))
-                }
-                else -> {
-                    callback(newExtractorLink("Filmapik", serverName, link))
-                }
-            }
+            callback(newExtractorLink("Filmapik", serverName, link))
         }
 
         document.select("div#download a.myButton[href]").forEachIndexed { index, el ->
             val href = el.attr("href").trim()
             if (href.isEmpty() || href == "about:blank") return@forEachIndexed
             val serverName = "Download Link ${index + 1} ${el.text().trim()}"
-            when {
-                href.contains("efek.stream") -> {
-                    EfekStream().getUrl(href, data, subtitleCallback) { extractedLink ->
-                        callback(extractedLink)
-                    }
-                }
-                else -> {
-                    callback(newExtractorLink("Filmapik", serverName, href))
-                }
-            }
+            callback(newExtractorLink("Filmapik", serverName, href))
         }
 
         return true
