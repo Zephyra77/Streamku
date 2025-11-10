@@ -7,8 +7,6 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.httpsify
-import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 
 class Filmapik : MainAPI() {
@@ -133,12 +131,13 @@ class Filmapik : MainAPI() {
                     else -> 0
                 }
                 callback(
-                    newExtractorLink(
+                    ExtractorLink(
                         source = "Filmapik",
                         name = "Filmapik $qualityText",
                         url = link,
                         referer = data,
-                        quality = quality
+                        quality = quality,
+                        isM3u8 = link.contains(".m3u8")
                     )
                 )
             }
@@ -149,12 +148,13 @@ class Filmapik : MainAPI() {
             if (link.isNotEmpty() && link != "about:blank") {
                 val title = el.text().trim()
                 callback(
-                    newExtractorLink(
+                    ExtractorLink(
                         source = "Filmapik",
                         name = "Download - $title",
                         url = link,
                         referer = data,
-                        quality = 0
+                        quality = 0,
+                        isM3u8 = link.contains(".m3u8")
                     )
                 )
             }
