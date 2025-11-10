@@ -1,4 +1,4 @@
-package com.efek
+package com.filmapik
 
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.SubtitleFile
