@@ -121,47 +121,57 @@ class Filmapik : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
 
-        document.select("li.dooplay_player_option[data-url]").forEach { el ->
+        document.select("li.dooplay_player_option[data-url]").forEachIndexed { index, el ->
             val link = el.attr("data-url").trim()
-            if (link.isNotEmpty() && link != "about:blank") {
-                val serverName = el.selectFirst(".title")?.text()?.trim() ?: "Unknown"
-                val quality = when {
-                    "1080" in serverName -> 1080
-                    "720" in serverName -> 720
-                    "360" in serverName -> 360
-                    else -> 0
+            if (link.isEmpty() || link == "about:blank") return@forEachIndexed
+
+            val type = el.attr("data-type")
+            val titleText = el.selectFirst("span.title")?.text()?.trim() ?: ""
+            val serverName = when (type) {
+                "movie" -> "Movie Server ${index + 1} $titleText"
+                "tv" -> "Episode Server ${index + 1} $titleText"
+                else -> "Server ${index + 1} $titleText"
+            }
+
+            when {
+                link.contains("efek.stream") -> {
+                    EfekStream().getUrl(link, data, subtitleCallback) { extractedLink ->
+                        callback(extractedLink)
+                    }
                 }
-                callback(
-                    newExtractorLink(
-                        source = "Filmapik",
-                        name = "Server $serverName",
-                        url = link,
-                        referer = data,
-                        quality = quality,
-                        isM3u8 = link.contains(".m3u8")
-                    )
-                )
+                link.contains("filemoon") || link.contains("buzzheavier") -> {
+                    val resolved = resolveIframe(link)
+                    callback(newExtractorLink("Filmapik", serverName, resolved))
+                }
+                else -> {
+                    callback(newExtractorLink("Filmapik", serverName, link))
+                }
             }
         }
 
-        document.select("div#download a.myButton[href]").forEach { el ->
-            val link = el.attr("href").trim()
-            if (link.isNotEmpty() && link != "about:blank") {
-                val title = el.text().trim()
-                callback(
-                    newExtractorLink(
-                        source = "Filmapik",
-                        name = "Download - $title",
-                        url = link,
-                        referer = data,
-                        quality = 0,
-                        isM3u8 = link.contains(".m3u8")
-                    )
-                )
+        document.select("div#download a.myButton[href]").forEachIndexed { index, el ->
+            val href = el.attr("href").trim()
+            if (href.isEmpty() || href == "about:blank") return@forEachIndexed
+            val serverName = "Download Link ${index + 1} ${el.text().trim()}"
+            when {
+                href.contains("efek.stream") -> {
+                    EfekStream().getUrl(href, data, subtitleCallback) { extractedLink ->
+                        callback(extractedLink)
+                    }
+                }
+                else -> {
+                    callback(newExtractorLink("Filmapik", serverName, href))
+                }
             }
         }
 
         return true
+    }
+
+    private suspend fun resolveIframe(url: String): String {
+        val doc = app.get(url).document
+        val iframe = doc.selectFirst("iframe[src]")
+        return iframe?.attr("src")?.trim() ?: url
     }
 
     private fun String?.fixImageQuality(): String? {
