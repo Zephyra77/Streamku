@@ -36,12 +36,10 @@ class MidasMovie : MainAPI() {
         val title = a.text().trim()
         val poster = fixUrlNull(selectFirst(".poster img")?.attr("src"))
         val quality = selectFirst(".mepo .quality")?.text()
-        val rating = selectFirst(".rating")?.text()?.trim()
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = poster
             if (!quality.isNullOrBlank()) addQuality(quality)
-            if (!rating.isNullOrBlank()) addSubTitle("Rating $rating")
         }
     }
 
