@@ -26,22 +26,22 @@ class MidasMovie : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = "${mainUrl}${request.data}"
         val doc = app.get(url).document
-
         val items = doc.select("article.item").mapNotNull { it.toSearchResult() }
-
         return newHomePageResponse(request.name, items)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val a = selectFirst("a[href][title]") ?: return null
-        val href = fixUrl(a.attr("href") ?: return null)
-        val title = a.attr("title")?.trim() ?: return null
-        val poster = fixUrlNull(selectFirst("img[src]")?.attr("src"))
-        val quality = selectFirst(".quality")?.text()
+        val a = selectFirst(".data h3 a") ?: return null
+        val href = fixUrl(a.attr("href"))
+        val title = a.text().trim()
+        val poster = fixUrlNull(selectFirst(".poster img")?.attr("src"))
+        val quality = selectFirst(".mepo .quality")?.text()
+        val rating = selectFirst(".rating")?.text()?.trim()
 
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = poster
             if (!quality.isNullOrBlank()) addQuality(quality)
+            if (!rating.isNullOrBlank()) addSubTitle("Rating $rating")
         }
     }
 
