@@ -52,7 +52,7 @@ class MidasMovie : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim() ?: ""
+        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
@@ -78,17 +78,17 @@ class MidasMovie : MainAPI() {
                 )
             }
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                posterUrl = poster
-                plot = description
-                tags = genres
+                this.posterUrl = poster
+                this.plot = description
+                this.tags = genres
                 addActors(actors)
                 this.year = year
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, url) {
-                posterUrl = poster
-                plot = description
-                tags = genres
+                this.posterUrl = poster
+                this.plot = description
+                this.tags = genres
                 addActors(actors)
                 this.year = year
             }
