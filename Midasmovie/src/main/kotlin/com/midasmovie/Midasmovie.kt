@@ -4,6 +4,8 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
+import java.text.SimpleDateFormat
+import java.util.*
 
 class MidasMovie : MainAPI() {
     override var mainUrl = "https://midasmovie.live"
@@ -20,6 +22,7 @@ class MidasMovie : MainAPI() {
         "/genre/animation/" to "Animation",
         "/genre/action/" to "Action",
         "/genre/comedy/" to "Comedy",
+        "/genre/drama/" to "Drama"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -69,7 +72,7 @@ class MidasMovie : MainAPI() {
                         name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
                         episode = epNum
                         posterUrl = epPoster
-                        date = parseDate(epDate)?.time
+                        date = parseDateSafe(epDate)?.time
                     }
                 )
             }
@@ -124,16 +127,26 @@ class MidasMovie : MainAPI() {
                 if (videoSrc != null) {
                     callback.invoke(
                         newExtractorLink(
-                            name = "MidasMovie",
-                            source = "MidasMovie",
-                            url = fixUrl(videoSrc),
-                            referer = mainUrl,
-                            quality = Qualities.Unknown.value,
+                            this.name,
+                            this.name,
+                            fixUrl(videoSrc),
+                            mainUrl,
+                            Qualities.Unknown.value,
+                            isM3u8 = true
                         )
                     )
                 }
             }
         }
         return true
+    }
+
+    private fun parseDateSafe(dateStr: String?): Date? {
+        if (dateStr.isNullOrBlank()) return null
+        return try {
+            SimpleDateFormat("MMM. dd, yyyy", Locale.ENGLISH).parse(dateStr)
+        } catch (_: Exception) {
+            null
+        }
     }
 }
