@@ -59,6 +59,7 @@ class MidasMovie : MainAPI() {
         val actors = doc.select("span.tagline:contains(Stars) a, div.cast a").map { it.text() }
         val year = doc.selectFirst("span.date")?.text()?.toIntOrNull()
         val hasEpisodes = doc.selectFirst("#serie_contenido, #seasons") != null
+
         if (hasEpisodes) {
             val episodes = mutableListOf<Episode>()
             doc.select("#seasons .se-c ul.episodios li").forEachIndexed { _, el ->
@@ -127,16 +128,17 @@ class MidasMovie : MainAPI() {
             } else {
                 val videoSrc = res.selectFirst("source[src]")?.attr("src")
                 if (videoSrc != null) {
-                    val link = newExtractorLink(
-                        source = this.name,
-                        name = this.name,
-                        url = fixUrl(videoSrc),
-                        type = ExtractorLinkType.VIDEO
-                    ) {
-                        quality = Qualities.Unknown.value
-                        isM3u8 = videoSrc.endsWith(".m3u8")
-                    }
-                    callback.invoke(link)
+                    callback.invoke(
+                        newExtractorLink(
+                            source = name,
+                            name = name,
+                            url = fixUrl(videoSrc),
+                            type = ExtractorLinkType.VIDEO
+                        ).apply {
+                            setQuality(Qualities.Unknown.value)
+                            setIsM3u8(videoSrc.endsWith(".m3u8"))
+                        }
+                    )
                 }
             }
         }
