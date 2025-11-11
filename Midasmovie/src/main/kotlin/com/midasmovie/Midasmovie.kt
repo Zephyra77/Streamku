@@ -52,7 +52,7 @@ class MidasMovie : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
+        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim() ?: ""
         val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
@@ -60,7 +60,7 @@ class MidasMovie : MainAPI() {
         val year = doc.selectFirst("span.date")?.text()?.toIntOrNull()
         val hasEpisodes = doc.selectFirst("#serie_contenido, #seasons") != null
 
-        if (hasEpisodes) {
+        return if (hasEpisodes) {
             val episodes = mutableListOf<Episode>()
             doc.select("#seasons .se-c ul.episodios li").forEachIndexed { _, el ->
                 val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
@@ -70,17 +70,14 @@ class MidasMovie : MainAPI() {
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
                 episodes.add(
                     newEpisode(epLink) {
-                        var nameVar = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
-                        var episodeVar = epNum
-                        var posterVar = epPoster
-                        name = nameVar
-                        episode = episodeVar
-                        posterUrl = posterVar
-                        date = parseDateSafe(epDate)?.time
+                        this.name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
+                        this.episode = epNum
+                        this.posterUrl = epPoster
+                        this.date = parseDateSafe(epDate)?.time
                     }
                 )
             }
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 posterUrl = poster
                 plot = description
                 tags = genres
@@ -88,7 +85,7 @@ class MidasMovie : MainAPI() {
                 this.year = year
             }
         } else {
-            return newMovieLoadResponse(title, url, TvType.Movie, url) {
+            newMovieLoadResponse(title, url, TvType.Movie, url) {
                 posterUrl = poster
                 plot = description
                 tags = genres
@@ -122,18 +119,16 @@ class MidasMovie : MainAPI() {
                     "nume" to nume,
                     "type" to type
                 ),
-                headers = mapOf(
-                    "X-Requested-With" to "XMLHttpRequest",
-                    "Referer" to data
-                )
+                headers = mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data)
             ).document
 
-            val iframeSrc = res.selectFirst("iframe[src]")?.attr("src")
-            if (!iframeSrc.isNullOrBlank()) {
-                loadExtractor(iframeSrc, data, subtitleCallback, callback)
+            val iframe = res.selectFirst("iframe[src]")?.attr("src")
+            if (iframe != null) {
+                loadExtractor(iframe, data, subtitleCallback, callback)
             } else {
                 val videoSrc = res.selectFirst("source[src]")?.attr("src")
-                if (!videoSrc.isNullOrBlank()) {
+                if (videoSrc != null) {
+                    val isM3u8 = videoSrc.endsWith(".m3u8")
                     callback(
                         newExtractorLink(
                             source = name,
@@ -141,7 +136,8 @@ class MidasMovie : MainAPI() {
                             url = fixUrl(videoSrc),
                             type = ExtractorLinkType.VIDEO
                         ).apply {
-                            isM3u8 = videoSrc.endsWith(".m3u8")
+                            quality = Qualities.Unknown.value
+                            this.isM3u8 = isM3u8
                         }
                     )
                 }
