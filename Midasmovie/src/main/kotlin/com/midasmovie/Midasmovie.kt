@@ -2,6 +2,7 @@ package com.midasmovie
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.extractors.ExtractorLink
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
@@ -127,17 +128,16 @@ class MidasMovie : MainAPI() {
                 loadExtractor(iframe, data, subtitleCallback, callback)
             } else {
                 val videoSrc = res.selectFirst("source[src]")?.attr("src")
-                if (videoSrc != null) {
+                if (!videoSrc.isNullOrBlank()) {
                     callback.invoke(
                         newExtractorLink(
                             source = name,
                             name = name,
                             url = fixUrl(videoSrc),
-                            type = ExtractorLinkType.VIDEO
-                        ).apply {
-                            setQuality(Qualities.Unknown.value)
-                            setIsM3u8(videoSrc.endsWith(".m3u8"))
-                        }
+                            type = ExtractorLinkType.VIDEO,
+                            quality = Qualities.Unknown.value,
+                            isM3u8 = videoSrc.endsWith(".m3u8")
+                        )
                     )
                 }
             }
