@@ -127,12 +127,16 @@ class MidasMovie : MainAPI() {
             } else {
                 val videoSrc = res.selectFirst("source[src]")?.attr("src")
                 if (videoSrc != null) {
-                    callback.invoke(
-                        newExtractorLink(this.name, this.name, fixUrl(videoSrc), ExtractorLinkType.VIDEO) {
-                            this.quality = Qualities.Unknown.value
-                            this.isM3u8 = true
-                        }
-                    )
+                    val link = newExtractorLink(
+                        source = this.name,
+                        name = this.name,
+                        url = fixUrl(videoSrc),
+                        type = ExtractorLinkType.VIDEO
+                    ) {
+                        quality = Qualities.Unknown.value
+                        isM3u8 = videoSrc.endsWith(".m3u8")
+                    }
+                    callback.invoke(link)
                 }
             }
         }
