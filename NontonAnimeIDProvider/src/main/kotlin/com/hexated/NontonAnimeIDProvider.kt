@@ -10,7 +10,6 @@ import com.lagradost.cloudstream3.utils.loadExtractor
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URI
 import java.util.Base64
@@ -126,7 +125,12 @@ class NontonAnimeIDProvider : MainAPI() {
         }
     }
 
-    override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean = coroutineScope {
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean = coroutineScope {
         val doc = app.get(data).document
         val iframe = doc.selectFirst("iframe[data-src]")?.attr("data-src")
         if (!iframe.isNullOrBlank()) loadExtractor(fixUrl(iframe), data, subtitleCallback, callback)
