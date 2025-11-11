@@ -70,9 +70,12 @@ class MidasMovie : MainAPI() {
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
                 episodes.add(
                     newEpisode(epLink) {
-                        name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
-                        episode = epNum
-                        posterUrl = epPoster
+                        var nameVar = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
+                        var episodeVar = epNum
+                        var posterVar = epPoster
+                        name = nameVar
+                        episode = episodeVar
+                        posterUrl = posterVar
                         date = parseDateSafe(epDate)?.time
                     }
                 )
@@ -112,9 +115,17 @@ class MidasMovie : MainAPI() {
             if (nume.equals("trailer", true)) return@forEach
 
             val res = app.post(
-                "$mainUrl/wp-admin/admin-ajax.php",
-                mapOf("action" to "doo_player_ajax", "id" to postId, "nume" to nume, "type" to type),
-                mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data)
+                url = "$mainUrl/wp-admin/admin-ajax.php",
+                data = mapOf(
+                    "action" to "doo_player_ajax",
+                    "id" to postId,
+                    "nume" to nume,
+                    "type" to type
+                ),
+                headers = mapOf(
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "Referer" to data
+                )
             ).document
 
             val iframeSrc = res.selectFirst("iframe[src]")?.attr("src")
@@ -129,7 +140,9 @@ class MidasMovie : MainAPI() {
                             name = li.selectFirst(".title")?.text().orEmpty(),
                             url = fixUrl(videoSrc),
                             type = ExtractorLinkType.VIDEO
-                        ).apply { isM3u8 = videoSrc.endsWith(".m3u8") }
+                        ).apply {
+                            isM3u8 = videoSrc.endsWith(".m3u8")
+                        }
                     )
                 }
             }
