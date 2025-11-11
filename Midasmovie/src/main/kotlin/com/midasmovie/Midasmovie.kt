@@ -22,7 +22,6 @@ class MidasMovie : MainAPI() {
         "/genre/animation/" to "Animation",
         "/genre/action/" to "Action",
         "/genre/comedy/" to "Comedy",
-        "/genre/drama/" to "Drama"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -103,11 +102,13 @@ class MidasMovie : MainAPI() {
         val doc = app.get(data).document
         val players = doc.select("li.dooplay_player_option[data-nume]")
         if (players.isEmpty()) return false
+
         players.forEach { li ->
             val postId = li.attr("data-post")
             val nume = li.attr("data-nume")
             val type = li.attr("data-type")
             if (nume.equals("trailer", true)) return@forEach
+
             val res = app.post(
                 url = "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
@@ -119,6 +120,7 @@ class MidasMovie : MainAPI() {
                 referer = data,
                 headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
+
             val iframe = res.selectFirst("iframe[src]")?.attr("src")
             if (iframe != null) {
                 loadExtractor(iframe, data, subtitleCallback, callback)
@@ -127,17 +129,17 @@ class MidasMovie : MainAPI() {
                 if (videoSrc != null) {
                     callback.invoke(
                         newExtractorLink(
-                            this.name,
-                            this.name,
-                            fixUrl(videoSrc),
-                            mainUrl,
-                            Qualities.Unknown.value,
-                            isM3u8 = true
+                            name = this.name,
+                            url = fixUrl(videoSrc),
+                            referer = mainUrl,
+                            quality = Qualities.Unknown.value,
+                            type = ExtractorLinkType.Direct
                         )
                     )
                 }
             }
         }
+
         return true
     }
 
