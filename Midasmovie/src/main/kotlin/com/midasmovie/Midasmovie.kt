@@ -52,7 +52,7 @@ class MidasMovie : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
+        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim() ?: ""
         val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
@@ -60,7 +60,7 @@ class MidasMovie : MainAPI() {
         val year = doc.selectFirst("span.date")?.text()?.toIntOrNull()
         val hasEpisodes = doc.selectFirst("#serie_contenido, #seasons") != null
 
-        return if (hasEpisodes) {
+        if (hasEpisodes) {
             val episodes = mutableListOf<Episode>()
             doc.select("#seasons .se-c ul.episodios li").forEachIndexed { _, el ->
                 val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
@@ -77,7 +77,7 @@ class MidasMovie : MainAPI() {
                     }
                 )
             }
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.plot = description
                 this.tags = genres
@@ -85,7 +85,7 @@ class MidasMovie : MainAPI() {
                 this.year = year
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, url) {
+            return newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = poster
                 this.plot = description
                 this.tags = genres
