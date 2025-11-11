@@ -16,7 +16,7 @@ class MidasMovie : MainAPI() {
         "/movies/" to "Film Terbaru",
         "/genre/vivamax/" to "Vivamax",
         "/genre/horror/" to "Horor",
-        "/genre/korean-drama/" to "Drama Korea",
+        "/genre/korean-drama/" to "Serial Drama",
         "/genre/animation/" to "Animation",
         "/genre/action/" to "Action",
         "/genre/comedy/" to "Comedy",
@@ -24,19 +24,18 @@ class MidasMovie : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = "${mainUrl}${request.data}"
+        val url = "$mainUrl${request.data}"
         val doc = app.get(url).document
         val items = doc.select("article.item").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val a = selectFirst(".data h3 a") ?: return null
+        val a = selectFirst("a[href][title]") ?: return null
         val href = fixUrl(a.attr("href"))
-        val title = a.text().trim()
-        val poster = fixUrlNull(selectFirst(".poster img")?.attr("src"))
-        val quality = selectFirst(".mepo .quality")?.text()
-
+        val title = a.attr("title").trim()
+        val poster = fixUrlNull(selectFirst("img[src]")?.attr("src"))
+        val quality = selectFirst(".quality")?.text()
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = poster
             if (!quality.isNullOrBlank()) addQuality(quality)
@@ -51,33 +50,40 @@ class MidasMovie : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-
-        val title = doc.selectFirst("h1[itemprop=name]")?.text()?.trim()
-            ?: doc.selectFirst(".sheader h1")?.text()?.trim() ?: ""
+        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim() ?: ""
         val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
         val actors = doc.select("span.tagline:contains(Stars) a, div.cast a").map { it.text() }
         val year = doc.selectFirst("span.date")?.text()?.toIntOrNull()
-
-        val eps = doc.select(".seasons .se-c .episodios li a")
-        return if (eps.isNotEmpty()) {
-            val episodes = eps.mapIndexed { i, el ->
-                newEpisode(el.attr("href")) {
-                    name = el.text().ifBlank { "Episode ${i + 1}" }
-                    episode = i + 1
-                }
+        val hasEpisodes = doc.selectFirst("#serie_contenido, #seasons") != null
+        if (hasEpisodes) {
+            val episodes = mutableListOf<Episode>()
+            doc.select("#seasons .se-c ul.episodios li").forEachIndexed { _, el ->
+                val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
+                val epLink = fixUrl(el.selectFirst(".episodiotitle a")?.attr("href").orEmpty())
+                val epPoster = fixUrlNull(el.selectFirst("img")?.attr("src"))
+                val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
+                val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
+                episodes.add(
+                    newEpisode(epLink) {
+                        name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
+                        episode = epNum
+                        posterUrl = epPoster
+                        date = epDate
+                    }
+                )
             }
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                posterUrl = poster ?: ""
+            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                posterUrl = poster
                 plot = description
                 tags = genres
                 addActors(actors)
                 this.year = year
             }
         } else {
-            newMovieLoadResponse(title ?: "", url, TvType.Movie, url) {
-                posterUrl = poster ?: ""
+            return newMovieLoadResponse(title, url, TvType.Movie, url) {
+                posterUrl = poster
                 plot = description
                 tags = genres
                 addActors(actors)
@@ -94,14 +100,12 @@ class MidasMovie : MainAPI() {
     ): Boolean {
         val doc = app.get(data).document
         val players = doc.select("li.dooplay_player_option[data-nume]")
-
+        if (players.isEmpty()) return false
         players.forEach { li ->
             val postId = li.attr("data-post")
             val nume = li.attr("data-nume")
             val type = li.attr("data-type")
-
             if (nume.equals("trailer", true)) return@forEach
-
             val res = app.post(
                 url = "$mainUrl/wp-admin/admin-ajax.php",
                 data = mapOf(
@@ -110,11 +114,26 @@ class MidasMovie : MainAPI() {
                     "nume" to nume,
                     "type" to type
                 ),
-                referer = data
+                referer = data,
+                headers = mapOf("X-Requested-With" to "XMLHttpRequest")
             ).document
-
-            val iframe = res.selectFirst("iframe")?.attr("src") ?: return@forEach
-            loadExtractor(iframe, data, subtitleCallback, callback)
+            val iframe = res.selectFirst("iframe[src]")?.attr("src")
+            if (iframe != null) {
+                loadExtractor(iframe, data, subtitleCallback, callback)
+            } else {
+                val videoSrc = res.selectFirst("source[src]")?.attr("src")
+                if (videoSrc != null) {
+                    callback.invoke(
+                        ExtractorLink(
+                            source = "MidasMovie",
+                            name = "MidasMovie",
+                            url = fixUrl(videoSrc),
+                            referer = mainUrl,
+                            quality = Qualities.Unknown
+                        )
+                    )
+                }
+            }
         }
         return true
     }
