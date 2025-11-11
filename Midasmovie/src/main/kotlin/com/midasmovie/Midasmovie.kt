@@ -39,7 +39,7 @@ class MidasMovie : MainAPI() {
         val poster = fixUrlNull(selectFirst("img[src]")?.attr("src"))
         val quality = selectFirst(".quality")?.text()
         return newMovieSearchResponse(title, href, TvType.Movie) {
-            posterUrl = poster
+            this.posterUrl = poster
             if (!quality.isNullOrBlank()) addQuality(quality)
         }
     }
@@ -61,34 +61,31 @@ class MidasMovie : MainAPI() {
         val hasEpisodes = doc.selectFirst("#serie_contenido, #seasons") != null
 
         return if (hasEpisodes) {
-            var episodes = mutableListOf<Episode>()
-            doc.select("#seasons .se-c ul.episodios li").forEach { el ->
+            val episodes = doc.select("#seasons .se-c ul.episodios li").map { el ->
                 val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
                 val epLink = fixUrl(el.selectFirst(".episodiotitle a")?.attr("href").orEmpty())
                 val epPoster = fixUrlNull(el.selectFirst("img")?.attr("src"))
                 val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
-                episodes.add(
-                    newEpisode(epLink) {
-                        name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
-                        episode = epNum
-                        posterUrl = epPoster
-                        date = parseDateSafe(epDate)?.time
-                    }
-                )
+                newEpisode(epLink) {
+                    this.name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
+                    this.episode = epNum
+                    this.posterUrl = epPoster
+                    this.date = parseDateSafe(epDate)?.time
+                }
             }
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                posterUrl = poster
-                plot = description
-                tags = genres
+                this.posterUrl = poster
+                this.plot = description
+                this.tags = genres
                 addActors(actors)
                 this.year = year
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, url) {
-                posterUrl = poster
-                plot = description
-                tags = genres
+                this.posterUrl = poster
+                this.plot = description
+                this.tags = genres
                 addActors(actors)
                 this.year = year
             }
@@ -102,48 +99,47 @@ class MidasMovie : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val doc = app.get(data).document
-        var players = doc.select("li.dooplay_player_option[data-nume]")
-        if (players.isEmpty()) return false
+        val links = mutableListOf<String>()
 
-        players.forEach { li ->
-            val postId = li.attr("data-post")
-            val nume = li.attr("data-nume")
-            val type = li.attr("data-type")
-            if (nume.equals("trailer", true)) return@forEach
+        doc.select("li.dooplay_player_option[data-url]").forEach { el ->
+            val url = el.attr("data-url").trim()
+            if (url.isNotEmpty()) links.add(url)
+        }
 
-            val res = app.post(
-                url = "$mainUrl/wp-admin/admin-ajax.php",
-                data = mapOf(
-                    "action" to "doo_player_ajax",
-                    "id" to postId,
-                    "nume" to nume,
-                    "type" to type
-                ),
-                headers = mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data)
-            ).document
+        doc.select("div#download a.myButton[href]").forEach { a ->
+            val url = a.attr("href").trim()
+            if (url.isNotEmpty()) links.add(url)
+        }
 
-            val iframe = res.selectFirst("iframe[src]")?.attr("src")
-            if (iframe != null) {
-                loadExtractor(iframe, data, subtitleCallback, callback)
-            } else {
-                val videoSrc = res.selectFirst("source[src]")?.attr("src")
-                if (videoSrc != null) {
-                    val isM3u8 = videoSrc.endsWith(".m3u8")
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = li.selectFirst(".title")?.text().orEmpty(),
-                            url = fixUrl(videoSrc),
-                            type = ExtractorLinkType.VIDEO
-                        ).apply {
-                            quality = Qualities.Unknown.value
-                            this.isM3u8 = isM3u8
-                        }
-                    )
-                }
+        if (links.isEmpty()) return false
+
+        for (raw in links) {
+            val resolved = resolveIframe(raw)
+            loadExtractor(resolved, data, subtitleCallback, callback)
+        }
+
+        return true
+    }
+
+    private suspend fun resolveIframe(url: String): String {
+        val res = app.get(url, allowRedirects = true)
+        val doc = res.document
+
+        doc.selectFirst("iframe[src]")?.attr("src")?.trim()?.let {
+            if (it.startsWith("http")) return it
+        }
+
+        doc.select("meta[http-equiv=refresh]").forEach { meta ->
+            meta.attr("content")?.substringAfter("URL=")?.trim()?.let { refreshUrl ->
+                if (refreshUrl.startsWith("http")) return resolveIframe(refreshUrl)
             }
         }
-        return true
+
+        Regex("""location\.href\s*=\s*["'](.*?)["']""").find(doc.select("script").html())?.groupValues?.get(1)?.let { jsUrl ->
+            if (jsUrl.startsWith("http")) return resolveIframe(jsUrl)
+        }
+
+        return res.url
     }
 
     private fun parseDateSafe(dateStr: String?): Date? {
