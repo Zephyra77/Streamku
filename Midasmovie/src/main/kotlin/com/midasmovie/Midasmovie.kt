@@ -52,7 +52,7 @@ class MidasMovie : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
+        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim() ?: ""
         val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
@@ -136,7 +136,7 @@ class MidasMovie : MainAPI() {
                             url = fixUrl(videoSrc),
                             type = ExtractorLinkType.VIDEO
                         ).apply {
-                            quality = Qualities.Unknown.value
+                            this.quality = Qualities.Unknown.value
                             this.isM3u8 = isM3u8
                         }
                     )
