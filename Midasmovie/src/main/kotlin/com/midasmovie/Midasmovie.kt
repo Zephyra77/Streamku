@@ -21,7 +21,8 @@ class MidasMovie : MainAPI() {
         "/genre/korean-drama/" to "Serial Drama",
         "/genre/animation/" to "Animation",
         "/genre/action/" to "Action",
-        "/genre/comedy/" to "Comedy"
+        "/genre/comedy/" to "Comedy",
+        "/genre/drama/" to "Drama"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -117,8 +118,7 @@ class MidasMovie : MainAPI() {
                     "nume" to nume,
                     "type" to type
                 ),
-                referer = data,
-                headers = mapOf("X-Requested-With" to "XMLHttpRequest")
+                headers = mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data)
             ).document
 
             val iframe = res.selectFirst("iframe[src]")?.attr("src")
@@ -128,19 +128,14 @@ class MidasMovie : MainAPI() {
                 val videoSrc = res.selectFirst("source[src]")?.attr("src")
                 if (videoSrc != null) {
                     callback.invoke(
-                        newExtractorLink(
-                            this.name,
-                            this.name,
-                            fixUrl(videoSrc),
-                            mainUrl,
-                            Qualities.Unknown.value,
-                            false
-                        )
+                        newExtractorLink(this.name, this.name, fixUrl(videoSrc), ExtractorLinkType.VIDEO) {
+                            this.quality = Qualities.Unknown.value
+                            this.isM3u8 = true
+                        }
                     )
                 }
             }
         }
-
         return true
     }
 
