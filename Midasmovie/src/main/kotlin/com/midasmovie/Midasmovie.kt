@@ -52,7 +52,7 @@ class MidasMovie : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim() ?: ""
+        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
@@ -68,14 +68,12 @@ class MidasMovie : MainAPI() {
                 val epPoster = fixUrlNull(el.selectFirst("img")?.attr("src"))
                 val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
-                episodes.add(
-                    newEpisode(epLink) {
-                        name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
-                        episode = epNum
-                        posterUrl = epPoster
-                        date = parseDateSafe(epDate)?.time
-                    }
-                )
+                episodes.add(newEpisode(epLink) {
+                    name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
+                    episode = epNum
+                    posterUrl = epPoster
+                    date = parseDateSafe(epDate)?.time
+                })
             }
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 posterUrl = poster
@@ -102,46 +100,33 @@ class MidasMovie : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val doc = app.get(data).document
-        val players = doc.select("li.dooplay_player_option[data-nume]")
-        if (players.isEmpty()) return false
+        doc.select("script").firstOrNull { it.html().contains("jwplayer.key") }?.let { script ->
+            Regex("""'file'\s*:\s*'(.*?)'(?:,\s*'label'\s*:\s*'(.*?)')?""").findAll(script.html()).forEach {
+                val url = it.groupValues[1]
+                val label = it.groupValues.getOrNull(2) ?: "Unknown"
+                callback(newExtractorLink(name, label, fixUrl(url), ExtractorLinkType.VIDEO).apply { isM3u8 = url.endsWith(".m3u8") })
+            }
+            Regex("""'file'\s*:\s*'(.*?)'(?:,\s*'label'\s*:\s*'(.*?)')?""").findAll(
+                Regex("""'captions'\s*:\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(script.html())?.groupValues?.get(1).orEmpty()
+            ).forEach {
+                val url = it.groupValues[1]
+                if (url.isNotBlank()) subtitleCallback(SubtitleFile(url, it.groupValues.getOrNull(2)?.lowercase() ?: "id"))
+            }
+            return true
+        }
 
-        players.forEach { li ->
+        doc.select("li.dooplay_player_option[data-nume]").forEach { li ->
             val postId = li.attr("data-post")
             val nume = li.attr("data-nume")
             val type = li.attr("data-type")
             if (nume.equals("trailer", true)) return@forEach
-
-            val res = app.post(
-                url = "$mainUrl/wp-admin/admin-ajax.php",
-                data = mapOf(
-                    "action" to "doo_player_ajax",
-                    "id" to postId,
-                    "nume" to nume,
-                    "type" to type
-                ),
-                headers = mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data)
-            ).document
-
-            val iframe = res.selectFirst("iframe[src]")?.attr("src")
-            if (iframe != null) {
-                loadExtractor(iframe, data, subtitleCallback, callback)
-            } else {
-                val videoSrc = res.selectFirst("source[src]")?.attr("src")
-                if (videoSrc != null) {
-                    val isM3u8 = videoSrc.endsWith(".m3u8")
-                    callback(
-                        newExtractorLink(
-                            source = name,
-                            name = li.selectFirst(".title")?.text().orEmpty(),
-                            url = fixUrl(videoSrc),
-                            type = ExtractorLinkType.VIDEO
-                        ).apply {
-                            quality = Qualities.Unknown.value
-                            this.isM3u8 = isM3u8
-                        }
-                    )
+            val res = app.post("$mainUrl/wp-admin/admin-ajax.php", mapOf(
+                "action" to "doo_player_ajax", "id" to postId, "nume" to nume, "type" to type
+            ), mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data)).document
+            res.selectFirst("iframe[src]")?.attr("src")?.let { loadExtractor(it, data, subtitleCallback, callback) }
+                ?: res.selectFirst("source[src]")?.attr("src")?.let { url ->
+                    callback(newExtractorLink(name, li.selectFirst(".title")?.text().orEmpty(), fixUrl(url), ExtractorLinkType.VIDEO).apply { isM3u8 = url.endsWith(".m3u8") })
                 }
-            }
         }
         return true
     }
@@ -150,8 +135,6 @@ class MidasMovie : MainAPI() {
         if (dateStr.isNullOrBlank()) return null
         return try {
             SimpleDateFormat("MMM. dd, yyyy", Locale.ENGLISH).parse(dateStr)
-        } catch (_: Exception) {
-            null
-        }
+        } catch (_: Exception) { null }
     }
 }
