@@ -34,13 +34,14 @@ class MidasMovie : MainAPI() {
 
     private fun Element.toSearchResult(): SearchResponse? {
         val a = selectFirst("a[href][title]") ?: return null
-        val href = fixUrl(a.attr("href"))
-        val title = a.attr("title").trim()
+        val href = fixUrl(a.attr("href") ?: return null)
+        val title = a.attr("title")?.trim() ?: return null
         val poster = fixUrlNull(selectFirst("img[src]")?.attr("src"))
         val quality = selectFirst(".quality")?.text()
+
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = poster
-            addQuality(quality)
+            if (!quality.isNullOrBlank()) addQuality(quality)
         }
     }
 
@@ -58,7 +59,7 @@ class MidasMovie : MainAPI() {
         val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
-        val actors = doc.select("span.tagline:contains(Stars) a").map { it.text() }
+        val actors = doc.select("span.tagline:contains(Stars) a, div.cast a").map { it.text() }
         val year = doc.selectFirst("span.date")?.text()?.toIntOrNull()
 
         val eps = doc.select(".seasons .se-c .episodios li a")
@@ -70,15 +71,15 @@ class MidasMovie : MainAPI() {
                 }
             }
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                posterUrl = poster
+                posterUrl = poster ?: ""
                 plot = description
                 tags = genres
                 addActors(actors)
                 this.year = year
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, url) {
-                posterUrl = poster
+            newMovieLoadResponse(title ?: "", url, TvType.Movie, url) {
+                posterUrl = poster ?: ""
                 plot = description
                 tags = genres
                 addActors(actors)
