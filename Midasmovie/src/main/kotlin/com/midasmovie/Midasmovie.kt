@@ -61,17 +61,24 @@ class MidasMovie : MainAPI() {
         val hasEpisodes = doc.selectFirst("#serie_contenido, #seasons") != null
 
         return if (hasEpisodes) {
-            val episodes = doc.select("#seasons .se-c ul.episodios li").map { el ->
-                val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
-                val epLink = fixUrl(el.selectFirst(".episodiotitle a")?.attr("href").orEmpty())
-                val epPoster = fixUrlNull(el.selectFirst("img")?.attr("src"))
-                val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
-                val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
-                newEpisode(epLink) {
-                    name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
-                    episode = epNum
-                    posterUrl = epPoster
-                    date = parseDateSafe(epDate)?.time
+            var episodes = mutableListOf<Episode>() // PERBAIKAN: val -> var
+            val seasonBlocks = doc.select("#seasons .se-c")
+            seasonBlocks.forEach { block ->
+                val epList = block.select("ul.episodios li")
+                epList.forEachIndexed { index, el ->
+                    val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
+                    val epLink = fixUrl(el.selectFirst(".episodiotitle a")?.attr("href").orEmpty())
+                    val epPoster = fixUrlNull(el.selectFirst("img")?.attr("src"))
+                    val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
+                    val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
+                    episodes.add(
+                        newEpisode(epLink) {
+                            name = epTitle.ifBlank { "Episode ${epNum ?: index + 1}" }
+                            episode = epNum
+                            posterUrl = epPoster
+                            date = parseDateSafe(epDate)?.time
+                        }
+                    )
                 }
             }
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
@@ -98,8 +105,8 @@ class MidasMovie : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data).document
-        val players = doc.select("li.dooplay_player_option[data-nume]")
+        var doc = app.get(data).document // PERBAIKAN: val -> var
+        var players = doc.select("li.dooplay_player_option[data-nume]") // PERBAIKAN: val -> var
         if (players.isEmpty()) return false
 
         players.forEach { li ->
