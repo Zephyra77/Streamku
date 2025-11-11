@@ -20,7 +20,6 @@ class MidasMovie : MainAPI() {
         "/genre/animation/" to "Animation",
         "/genre/action/" to "Action",
         "/genre/comedy/" to "Comedy",
-        "/genre/drama/" to "Drama"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -70,7 +69,7 @@ class MidasMovie : MainAPI() {
                         name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
                         episode = epNum
                         posterUrl = epPoster
-                        date = epDate
+                        date = parseDate(epDate)?.time
                     }
                 )
             }
@@ -124,12 +123,12 @@ class MidasMovie : MainAPI() {
                 val videoSrc = res.selectFirst("source[src]")?.attr("src")
                 if (videoSrc != null) {
                     callback.invoke(
-                        ExtractorLink(
-                            source = "MidasMovie",
+                        newExtractorLink(
                             name = "MidasMovie",
+                            source = "MidasMovie",
                             url = fixUrl(videoSrc),
                             referer = mainUrl,
-                            quality = Qualities.Unknown
+                            quality = Qualities.Unknown.value,
                         )
                     )
                 }
