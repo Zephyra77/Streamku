@@ -136,7 +136,7 @@ class MidasMovie : MainAPI() {
                             url = fixUrl(videoSrc),
                             type = ExtractorLinkType.VIDEO
                         ).apply {
-                            this.quality = Qualities.Unknown.value
+                            quality = Qualities.Unknown.value
                             this.isM3u8 = isM3u8
                         }
                     )
