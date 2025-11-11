@@ -39,7 +39,7 @@ class MidasMovie : MainAPI() {
         val poster = fixUrlNull(selectFirst("img[src]")?.attr("src"))
         val quality = selectFirst(".quality")?.text()
         return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = poster
+            posterUrl = poster
             if (!quality.isNullOrBlank()) addQuality(quality)
         }
     }
@@ -52,7 +52,7 @@ class MidasMovie : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim() ?: ""
+        val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
         val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
@@ -60,35 +60,32 @@ class MidasMovie : MainAPI() {
         val year = doc.selectFirst("span.date")?.text()?.toIntOrNull()
         val hasEpisodes = doc.selectFirst("#serie_contenido, #seasons") != null
 
-        if (hasEpisodes) {
-            val episodes = mutableListOf<Episode>()
-            doc.select("#seasons .se-c ul.episodios li").forEachIndexed { _, el ->
+        return if (hasEpisodes) {
+            val episodes = doc.select("#seasons .se-c ul.episodios li").map { el ->
                 val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
                 val epLink = fixUrl(el.selectFirst(".episodiotitle a")?.attr("href").orEmpty())
                 val epPoster = fixUrlNull(el.selectFirst("img")?.attr("src"))
                 val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
-                episodes.add(
-                    newEpisode(epLink) {
-                        this.name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
-                        this.episode = epNum
-                        this.posterUrl = epPoster
-                        this.date = parseDateSafe(epDate)?.time
-                    }
-                )
+                newEpisode(epLink) {
+                    name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
+                    episode = epNum
+                    posterUrl = epPoster
+                    date = parseDateSafe(epDate)?.time
+                }
             }
-            return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                this.posterUrl = poster
-                this.plot = description
-                this.tags = genres
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+                posterUrl = poster
+                plot = description
+                tags = genres
                 addActors(actors)
                 this.year = year
             }
         } else {
-            return newMovieLoadResponse(title, url, TvType.Movie, url) {
-                this.posterUrl = poster
-                this.plot = description
-                this.tags = genres
+            newMovieLoadResponse(title, url, TvType.Movie, url) {
+                posterUrl = poster
+                plot = description
+                tags = genres
                 addActors(actors)
                 this.year = year
             }
