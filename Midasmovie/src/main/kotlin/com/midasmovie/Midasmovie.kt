@@ -21,7 +21,7 @@ class MidasMovie : MainAPI() {
         "/genre/korean-drama/" to "Serial Drama",
         "/genre/animation/" to "Animation",
         "/genre/action/" to "Action",
-        "/genre/comedy/" to "Comedy",
+        "/genre/comedy/" to "Comedy"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -129,11 +129,12 @@ class MidasMovie : MainAPI() {
                 if (videoSrc != null) {
                     callback.invoke(
                         newExtractorLink(
-                            name = this.name,
-                            url = fixUrl(videoSrc),
-                            referer = mainUrl,
-                            quality = Qualities.Unknown.value,
-                            type = ExtractorLinkType.Direct
+                            this.name,
+                            this.name,
+                            fixUrl(videoSrc),
+                            mainUrl,
+                            Qualities.Unknown.value,
+                            false
                         )
                     )
                 }
