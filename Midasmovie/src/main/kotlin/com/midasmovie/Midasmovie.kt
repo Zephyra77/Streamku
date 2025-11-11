@@ -68,12 +68,14 @@ class MidasMovie : MainAPI() {
                 val epPoster = fixUrlNull(el.selectFirst("img")?.attr("src"))
                 val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
-                episodes.add(newEpisode(epLink) {
-                    name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
-                    episode = epNum
-                    posterUrl = epPoster
-                    date = parseDateSafe(epDate)?.time
-                })
+                episodes.add(
+                    newEpisode(epLink) {
+                        name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
+                        episode = epNum
+                        posterUrl = epPoster
+                        date = parseDateSafe(epDate)?.time
+                    }
+                )
             }
             return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 posterUrl = poster
@@ -100,33 +102,37 @@ class MidasMovie : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val doc = app.get(data).document
-        doc.select("script").firstOrNull { it.html().contains("jwplayer.key") }?.let { script ->
-            Regex("""'file'\s*:\s*'(.*?)'(?:,\s*'label'\s*:\s*'(.*?)')?""").findAll(script.html()).forEach {
-                val url = it.groupValues[1]
-                val label = it.groupValues.getOrNull(2) ?: "Unknown"
-                callback(newExtractorLink(name, label, fixUrl(url), ExtractorLinkType.VIDEO).apply { isM3u8 = url.endsWith(".m3u8") })
-            }
-            Regex("""'file'\s*:\s*'(.*?)'(?:,\s*'label'\s*:\s*'(.*?)')?""").findAll(
-                Regex("""'captions'\s*:\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL).find(script.html())?.groupValues?.get(1).orEmpty()
-            ).forEach {
-                val url = it.groupValues[1]
-                if (url.isNotBlank()) subtitleCallback(SubtitleFile(url, it.groupValues.getOrNull(2)?.lowercase() ?: "id"))
-            }
-            return true
-        }
+        val players = doc.select("li.dooplay_player_option[data-nume]")
+        if (players.isEmpty()) return false
 
-        doc.select("li.dooplay_player_option[data-nume]").forEach { li ->
+        players.forEach { li ->
             val postId = li.attr("data-post")
             val nume = li.attr("data-nume")
             val type = li.attr("data-type")
             if (nume.equals("trailer", true)) return@forEach
-            val res = app.post("$mainUrl/wp-admin/admin-ajax.php", mapOf(
-                "action" to "doo_player_ajax", "id" to postId, "nume" to nume, "type" to type
-            ), mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data)).document
-            res.selectFirst("iframe[src]")?.attr("src")?.let { loadExtractor(it, data, subtitleCallback, callback) }
-                ?: res.selectFirst("source[src]")?.attr("src")?.let { url ->
-                    callback(newExtractorLink(name, li.selectFirst(".title")?.text().orEmpty(), fixUrl(url), ExtractorLinkType.VIDEO).apply { isM3u8 = url.endsWith(".m3u8") })
+
+            val res = app.post(
+                "$mainUrl/wp-admin/admin-ajax.php",
+                mapOf("action" to "doo_player_ajax", "id" to postId, "nume" to nume, "type" to type),
+                mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to data)
+            ).document
+
+            val iframeSrc = res.selectFirst("iframe[src]")?.attr("src")
+            if (!iframeSrc.isNullOrBlank()) {
+                loadExtractor(iframeSrc, data, subtitleCallback, callback)
+            } else {
+                val videoSrc = res.selectFirst("source[src]")?.attr("src")
+                if (!videoSrc.isNullOrBlank()) {
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = li.selectFirst(".title")?.text().orEmpty(),
+                            url = fixUrl(videoSrc),
+                            type = ExtractorLinkType.VIDEO
+                        ).apply { isM3u8 = videoSrc.endsWith(".m3u8") }
+                    )
                 }
+            }
         }
         return true
     }
@@ -135,6 +141,8 @@ class MidasMovie : MainAPI() {
         if (dateStr.isNullOrBlank()) return null
         return try {
             SimpleDateFormat("MMM. dd, yyyy", Locale.ENGLISH).parse(dateStr)
-        } catch (_: Exception) { null }
+        } catch (_: Exception) {
+            null
+        }
     }
 }
