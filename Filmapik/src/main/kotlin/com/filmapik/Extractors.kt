@@ -5,8 +5,8 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.getAndUnpack
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.getAndUnpack
 import org.jsoup.nodes.Element
 
 class EfekStream : ExtractorApi() {
@@ -22,6 +22,7 @@ class EfekStream : ExtractorApi() {
     ) {
         val res = app.get(url, referer = referer)
         val doc = res.document
+
         val links = mutableListOf<ExtractorLink>()
 
         doc.select("script").forEach { script: Element ->
@@ -35,17 +36,13 @@ class EfekStream : ExtractorApi() {
 
                 val fileRegex = Regex("\"file\"\\s*:\\s*['\"](.*?)['\"]")
                 val labelRegex = Regex("\"label\"\\s*:\\s*['\"](.*?)['\"]")
+
                 val files = fileRegex.findAll(unpacked).map { it.groupValues[1] }.toList()
                 val labels = labelRegex.findAll(unpacked).map { it.groupValues[1] }.toList()
 
                 files.forEachIndexed { idx, filePath ->
                     val label = labels.getOrNull(idx) ?: ""
-                    val quality = when (label) {
-                        "1080p" -> Qualities.P1080
-                        "720p" -> Qualities.P720
-                        "360p" -> Qualities.P360
-                        else -> Qualities.Unknown
-                    }
+                    val quality = parseQualityFromLabel(label)
                     val finalUrl = if (filePath.startsWith("http")) filePath else "${mainUrl.trimEnd('/')}$filePath"
 
                     links.add(
@@ -66,7 +63,7 @@ class EfekStream : ExtractorApi() {
                             name,
                             "$name Download",
                             url = dlFinal
-                        ) { this.quality = Qualities.Unknown }
+                        ) { this.quality = Qualities.Unknown.value }
                     )
                 }
             }
@@ -78,11 +75,12 @@ class EfekStream : ExtractorApi() {
             val finalUrl = "${mainUrl.trimEnd('/')}$filePath"
             val qFromPath = Regex("/stream/(\\d+)/").find(filePath)?.groupValues?.getOrNull(1)?.toIntOrNull()
             val quality = when (qFromPath) {
-                1080 -> Qualities.P1080
-                720 -> Qualities.P720
-                360 -> Qualities.P360
-                else -> Qualities.Unknown
+                1080 -> Qualities.P1080.value
+                720 -> Qualities.P720.value
+                360 -> Qualities.P360.value
+                else -> Qualities.Unknown.value
             }
+
             links.add(
                 newExtractorLink(
                     name,
@@ -92,11 +90,20 @@ class EfekStream : ExtractorApi() {
             )
         }
 
-        val bestLink = links.find { it.quality == Qualities.P1080 }
-            ?: links.find { it.quality == Qualities.P720 }
-            ?: links.find { it.quality == Qualities.P360 }
+        val bestLink = links.find { it.quality == Qualities.P1080.value }
+            ?: links.find { it.quality == Qualities.P720.value }
+            ?: links.find { it.quality == Qualities.P360.value }
             ?: links.firstOrNull()
 
         bestLink?.let { callback(it) }
+    }
+
+    private fun parseQualityFromLabel(label: String): Int {
+        return when {
+            label.contains("1080", true) -> Qualities.P1080.value
+            label.contains("720", true) -> Qualities.P720.value
+            label.contains("360", true) -> Qualities.P360.value
+            else -> Qualities.Unknown.value
+        }
     }
 }
