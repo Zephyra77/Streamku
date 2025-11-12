@@ -3,7 +3,6 @@ package com.filmapik
 import com.lagradost.cloudstream3.ExtractorApi
 import com.lagradost.cloudstream3.Qualities
 import com.lagradost.cloudstream3.utils.*
-import com.lagradost.cloudstream3.utils.newSubtitleFile
 import org.jsoup.nodes.Document
 
 class EfekStream : ExtractorApi() {
@@ -14,10 +13,11 @@ class EfekStream : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (ExtractorLink) -> Unit,
+        subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val html = app.get(url, referer = referer).text
+        val res = app.get(url, referer = referer)
+        val html = res.text
         val videoRegex = Regex("""https://[A-Za-z0-9\.-]+/stream/\d+/[A-Za-z0-9]+/__001""")
 
         videoRegex.findAll(html).forEach { match ->
@@ -47,14 +47,12 @@ class ShortIcu : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (ExtractorLink) -> Unit,
+        subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val res = app.get(url, referer = referer)
         val iframe = res.document.selectFirst("iframe")?.attr("src")
-        if (!iframe.isNullOrEmpty()) {
-            loadExtractor(iframe, referer ?: url, subtitleCallback, callback)
-        }
+        iframe?.let { loadExtractor(it, referer ?: url, subtitleCallback, callback) }
     }
 }
 
@@ -66,14 +64,12 @@ class FileMoon : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (ExtractorLink) -> Unit,
+        subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val res = app.get(url, referer = referer)
         val iframe = res.document.selectFirst("iframe")?.attr("src")
-        if (!iframe.isNullOrEmpty()) {
-            loadExtractor(iframe, referer ?: url, subtitleCallback, callback)
-        }
+        iframe?.let { loadExtractor(it, referer ?: url, subtitleCallback, callback) }
     }
 }
 
@@ -85,7 +81,7 @@ class Ico3c : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (ExtractorLink) -> Unit,
+        subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val res = app.get(url, referer = referer)
@@ -100,8 +96,6 @@ class Ico3c : ExtractorApi() {
         val redirect = Regex("""window\.location\.href\s*=\s*['"]([^'"]+)['"]""")
             .find(script)?.groupValues?.get(1)
 
-        if (!redirect.isNullOrEmpty()) {
-            loadExtractor(redirect, referer ?: url, subtitleCallback, callback)
-        }
+        redirect?.let { loadExtractor(it, referer ?: url, subtitleCallback, callback) }
     }
 }
