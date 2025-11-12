@@ -3,6 +3,8 @@ package com.filmapik
 import com.lagradost.cloudstream3.ExtractorApi
 import com.lagradost.cloudstream3.Qualities
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.newSubtitleFile
 import org.jsoup.nodes.Document
 
 class EfekStream : ExtractorApi() {
