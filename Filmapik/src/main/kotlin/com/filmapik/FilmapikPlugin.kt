@@ -9,5 +9,9 @@ import com.lagradost.cloudstream3.plugins.Plugin
 class FilmapikPlugin : Plugin() {
     override fun load(context: Context) {
         registerMainAPI(Filmapik())
+        registerExtractorAPI(EfekStream())
+        registerExtractorAPI(ShortIcu())
+        registerExtractorAPI(FileMoon())
+        registerExtractorAPI(Ico3c())
     }
 }
