@@ -33,9 +33,9 @@ class MidasMovie : MainAPI() {
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
-        val a = selectFirst("a[href][title]") ?: return null
-        val href = fixUrl(a.attr("href"))
-        val title = a.attr("title").trim()
+        val linkEl = selectFirst("a[href][title]") ?: selectFirst("a[href]") ?: return null
+        val href = fixUrl(linkEl.attr("href").trim())
+        val title = linkEl.attr("title").trim().ifEmpty { linkEl.text().trim() }
 
         val imgEl = selectFirst("img") ?: return null
         val poster = fixUrlNull(
@@ -46,7 +46,10 @@ class MidasMovie : MainAPI() {
 
         val quality = selectFirst(".quality")?.text()?.trim()
 
-        return newMovieSearchResponse(title, href, TvType.Movie) {
+        // Tentukan tipe: Movie atau TV Series
+        val type = if (hasClass("tvshows")) TvType.TvSeries else TvType.Movie
+
+        return newMovieSearchResponse(title, href, type) {
             this.posterUrl = poster
             if (!quality.isNullOrBlank()) addQuality(quality)
         }
@@ -65,7 +68,6 @@ class MidasMovie : MainAPI() {
         val posterEl = doc.selectFirst(".poster img")
         val poster = fixUrlNull(
             posterEl?.attr("data-src").takeIf { !it.isNullOrBlank() }
-                ?: posterEl?.attr("data-lazy").takeIf { !it.isNullOrBlank() }
                 ?: posterEl?.attr("src")
         )
 
@@ -79,17 +81,13 @@ class MidasMovie : MainAPI() {
             val episodes = doc.select("#seasons .se-c ul.episodios li").map { el ->
                 val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
                 val epLink = fixUrl(el.selectFirst(".episodiotitle a")?.attr("href").orEmpty())
-
                 val epPosterEl = el.selectFirst("img")
                 val epPoster = fixUrlNull(
                     epPosterEl?.attr("data-src").takeIf { !it.isNullOrBlank() }
-                        ?: epPosterEl?.attr("data-lazy").takeIf { !it.isNullOrBlank() }
                         ?: epPosterEl?.attr("src")
                 )
-
                 val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
-
                 newEpisode(epLink) {
                     this.name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
                     this.episode = epNum
@@ -97,7 +95,6 @@ class MidasMovie : MainAPI() {
                     this.date = parseDateSafe(epDate)?.time
                 }
             }
-
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.plot = description
