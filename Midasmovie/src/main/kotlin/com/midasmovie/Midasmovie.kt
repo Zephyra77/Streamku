@@ -26,7 +26,7 @@ class MidasMovie : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = "$mainUrl${request.data}"
+        val url = "$mainUrl${request.data}?page=$page"
         val doc = app.get(url).document
         val items = doc.select("article.item").mapNotNull { it.toSearchResult() }
         return newHomePageResponse(request.name, items)
@@ -46,13 +46,14 @@ class MidasMovie : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/?s=$query"
+        val url = "$mainUrl/?s=${query.replace(" ", "+")}"
         val doc = app.get(url).document
         return doc.select("article.item").mapNotNull { it.toSearchResult() }
     }
 
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
+
         val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
         val posterEl = doc.selectFirst(".poster img")
         val poster = fixUrlNull(posterEl?.attr("data-src").ifBlank { posterEl?.attr("src") })
