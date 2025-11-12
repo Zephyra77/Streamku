@@ -1,7 +1,12 @@
 package com.filmapik
 
-import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.ExtractorApi
+import com.lagradost.cloudstream3.Qualities
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.utils.app
+import com.lagradost.cloudstream3.utils.loadExtractor
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Document
 
 class EfekStream : ExtractorApi() {
@@ -13,12 +18,14 @@ class EfekStream : ExtractorApi() {
         val html = app.get(url, referer = referer).text
         val links = mutableListOf<ExtractorLink>()
         val videoRegex = Regex("""https://[A-Za-z0-9\.-]+/stream/\d+/[A-Za-z0-9]+/__001""")
+
         videoRegex.findAll(html).forEach { match ->
             val videoUrl = match.value
             val quality = Regex("""/(\d+)/""").find(videoUrl)?.groupValues?.get(1)?.toIntOrNull()
                 ?: Qualities.Unknown.value
+
             links.add(
-                ExtractorLink(
+                newExtractorLink(
                     name = name,
                     source = name,
                     url = videoUrl,
@@ -28,6 +35,7 @@ class EfekStream : ExtractorApi() {
                 )
             )
         }
+
         return links
     }
 }
@@ -40,10 +48,11 @@ class ShortIcu : ExtractorApi() {
     override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink> {
         val res = app.get(url, referer = referer)
         val iframe = res.document.selectFirst("iframe")?.attr("src")
-        if (!iframe.isNullOrEmpty()) {
-            return loadExtractor(iframe, url)
+        return if (!iframe.isNullOrEmpty()) {
+            loadExtractor(iframe, referer ?: url)
+        } else {
+            emptyList()
         }
-        return emptyList()
     }
 }
 
@@ -55,10 +64,11 @@ class FileMoon : ExtractorApi() {
     override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink> {
         val res = app.get(url, referer = referer)
         val iframe = res.document.selectFirst("iframe")?.attr("src")
-        if (!iframe.isNullOrEmpty()) {
-            return loadExtractor(iframe, url)
+        return if (!iframe.isNullOrEmpty()) {
+            loadExtractor(iframe, referer ?: url)
+        } else {
+            emptyList()
         }
-        return emptyList()
     }
 }
 
@@ -71,14 +81,19 @@ class Ico3c : ExtractorApi() {
         val res = app.get(url, referer = referer)
         val doc = res.document
         val iframe = doc.selectFirst("iframe")?.attr("src")
+
         if (!iframe.isNullOrEmpty()) {
-            return loadExtractor(iframe, url)
+            return loadExtractor(iframe, referer ?: url)
         }
+
         val script = doc.select("script").joinToString("\n") { it.data() }
-        val redirect = Regex("""window\.location\.href\s*=\s*['"]([^'"]+)['"]""").find(script)?.groupValues?.get(1)
+        val redirect = Regex("""window\.location\.href\s*=\s*['"]([^'"]+)['"]""")
+            .find(script)?.groupValues?.get(1)
+
         if (!redirect.isNullOrEmpty()) {
-            return loadExtractor(redirect, url)
+            return loadExtractor(redirect, referer ?: url)
         }
+
         return emptyList()
     }
 }
