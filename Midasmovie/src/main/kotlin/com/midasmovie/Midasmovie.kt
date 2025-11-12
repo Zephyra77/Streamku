@@ -36,13 +36,16 @@ class MidasMovie : MainAPI() {
         val a = selectFirst("a[href][title]") ?: return null
         val href = fixUrl(a.attr("href"))
         val title = a.attr("title").trim()
+
         val imgEl = selectFirst("img") ?: return null
         val poster = fixUrlNull(
             imgEl.attr("data-src").takeIf { it.isNotBlank() }
-                ?: imgEl.attr("src").takeIf { it.isNotBlank() }
                 ?: imgEl.attr("data-lazy").takeIf { it.isNotBlank() }
+                ?: imgEl.attr("src")
         )
-        val quality = selectFirst(".quality")?.text()
+
+        val quality = selectFirst(".quality")?.text()?.trim()
+
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = poster
             if (!quality.isNullOrBlank()) addQuality(quality)
@@ -58,11 +61,14 @@ class MidasMovie : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
+
         val posterEl = doc.selectFirst(".poster img")
         val poster = fixUrlNull(
             posterEl?.attr("data-src").takeIf { !it.isNullOrBlank() }
-                ?: posterEl?.attr("src").takeIf { !it.isNullOrBlank() }
+                ?: posterEl?.attr("data-lazy").takeIf { !it.isNullOrBlank() }
+                ?: posterEl?.attr("src")
         )
+
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
         val actors = doc.select("span.tagline:contains(Stars) a, div.cast a").map { it.text() }
@@ -73,13 +79,17 @@ class MidasMovie : MainAPI() {
             val episodes = doc.select("#seasons .se-c ul.episodios li").map { el ->
                 val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
                 val epLink = fixUrl(el.selectFirst(".episodiotitle a")?.attr("href").orEmpty())
+
                 val epPosterEl = el.selectFirst("img")
                 val epPoster = fixUrlNull(
                     epPosterEl?.attr("data-src").takeIf { !it.isNullOrBlank() }
-                        ?: epPosterEl?.attr("src").takeIf { !it.isNullOrBlank() }
+                        ?: epPosterEl?.attr("data-lazy").takeIf { !it.isNullOrBlank() }
+                        ?: epPosterEl?.attr("src")
                 )
+
                 val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
+
                 newEpisode(epLink) {
                     this.name = epTitle.ifBlank { "Episode ${epNum ?: 1}" }
                     this.episode = epNum
@@ -87,6 +97,7 @@ class MidasMovie : MainAPI() {
                     this.date = parseDateSafe(epDate)?.time
                 }
             }
+
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.plot = description
@@ -113,36 +124,45 @@ class MidasMovie : MainAPI() {
     ): Boolean {
         val doc = app.get(data).document
         val links = mutableListOf<String>()
+
         doc.select("li.dooplay_player_option[data-url]").forEach { el ->
             val url = el.attr("data-url").trim()
             if (url.isNotEmpty()) links.add(url)
         }
+
         doc.select("div#download a.myButton[href]").forEach { a ->
             val url = a.attr("href").trim()
             if (url.isNotEmpty()) links.add(url)
         }
+
         if (links.isEmpty()) return false
+
         for (raw in links) {
             val resolved = resolveIframe(raw)
             loadExtractor(resolved, data, subtitleCallback, callback)
         }
+
         return true
     }
 
     private suspend fun resolveIframe(url: String): String {
         val res = app.get(url, allowRedirects = true)
         val doc = res.document
+
         doc.selectFirst("iframe[src]")?.attr("src")?.trim()?.let {
             if (it.startsWith("http")) return it
         }
+
         doc.select("meta[http-equiv=refresh]").forEach { meta ->
             meta.attr("content")?.substringAfter("URL=")?.trim()?.let { refreshUrl ->
                 if (refreshUrl.startsWith("http")) return resolveIframe(refreshUrl)
             }
         }
+
         Regex("""location\.href\s*=\s*["'](.*?)["']""").find(doc.select("script").html())?.groupValues?.get(1)?.let { jsUrl ->
             if (jsUrl.startsWith("http")) return resolveIframe(jsUrl)
         }
+
         return res.url
     }
 
