@@ -3,7 +3,6 @@ package com.filmapik
 import com.lagradost.cloudstream3.ExtractorApi
 import com.lagradost.cloudstream3.Qualities
 import com.lagradost.cloudstream3.utils.*
-import org.jsoup.nodes.Document
 
 class EfekStream : ExtractorApi() {
     override val name = "EfekStream"
@@ -88,14 +87,13 @@ class Ico3c : ExtractorApi() {
         callback: (ExtractorLink) -> Unit
     ) {
         val res = app.get(url, referer = referer)
-        val doc = res.document
-        val iframe = doc.selectFirst("iframe")?.attr("src")
+        val iframe = res.document.selectFirst("iframe")?.attr("src")
         if (!iframe.isNullOrEmpty()) {
             loadExtractor(iframe, referer ?: url, subtitleCallback, callback)
             return
         }
 
-        val script = doc.select("script").joinToString("\n") { it.data() }
+        val script = res.document.select("script").joinToString("\n") { it.data() }
         val redirect = Regex("""window\.location\.href\s*=\s*['"]([^'"]+)['"]""")
             .find(script)?.groupValues?.get(1)
 
