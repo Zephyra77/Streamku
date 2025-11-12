@@ -22,17 +22,14 @@ class EfekStream : ExtractorApi() {
     ) {
         val res = app.get(url, referer = referer)
         val doc = res.document
-
         val links = mutableListOf<ExtractorLink>()
 
         doc.select("script").forEach { script: Element ->
             val data = script.data()
             if (data.contains("eval(function(p,a,c,k,e,d)")) {
                 val unpacked = try { getAndUnpack(data) } catch (e: Exception) { null } ?: return@forEach
-
                 val fileRegex = Regex("\"file\"\\s*:\\s*['\"](.*?)['\"]")
                 val labelRegex = Regex("\"label\"\\s*:\\s*['\"](.*?)['\"]")
-
                 val files = fileRegex.findAll(unpacked).map { it.groupValues[1] }.toList()
                 val labels = labelRegex.findAll(unpacked).map { it.groupValues[1] }.toList()
 
@@ -40,21 +37,13 @@ class EfekStream : ExtractorApi() {
                     val label = labels.getOrNull(idx) ?: ""
                     val quality = parseQualityFromLabel(label)
                     val finalUrl = if (filePath.startsWith("http")) filePath else "${mainUrl.trimEnd('/')}$filePath"
-
-                    links.add(
-                        newExtractorLink(name, "$name $label", url = finalUrl) {
-                            this.quality = quality
-                        }
-                    )
+                    links.add(newExtractorLink(name, "$name $label", url = finalUrl) { this.quality = quality })
                 }
 
                 val downloadRegex = Regex("window\\.open\\([\"']([^\"']+)[\"']")
-                val downloadMatch = downloadRegex.find(unpacked)
-                downloadMatch?.groupValues?.getOrNull(1)?.let { dl ->
+                downloadRegex.find(unpacked)?.groupValues?.getOrNull(1)?.let { dl ->
                     val dlFinal = if (dl.startsWith("http")) dl else "${mainUrl.trimEnd('/')}$dl"
-                    links.add(
-                        newExtractorLink(name, "$name Download", url = dlFinal) { this.quality = Qualities.Unknown }
-                    )
+                    links.add(newExtractorLink(name, "$name Download", url = dlFinal) { this.quality = Qualities.Unknown })
                 }
             }
         }
@@ -64,23 +53,19 @@ class EfekStream : ExtractorApi() {
             val filePath = m.value
             val finalUrl = "${mainUrl.trimEnd('/')}$filePath"
             val qFromPath = Regex("/stream/(\\d+)/").find(filePath)?.groupValues?.getOrNull(1)?.toIntOrNull()
-            val quality = qFromPath ?: Qualities.Unknown
-
-            links.add(
-                newExtractorLink(name, name, url = finalUrl) { this.quality = quality }
-            )
+            val quality = Qualities.fromInt(qFromPath ?: 0)
+            links.add(newExtractorLink(name, name, url = finalUrl) { this.quality = quality })
         }
 
-        val bestLink = links.find { it.quality >= 1080 }
-            ?: links.find { it.quality >= 720 }
-            ?: links.find { it.quality >= 360 }
+        val bestLink = links.find { it.quality >= Qualities.P1080 }
+            ?: links.find { it.quality >= Qualities.P720 }
+            ?: links.find { it.quality >= Qualities.P360 }
             ?: links.firstOrNull()
-
         bestLink?.let { callback(it) }
     }
 
-    private fun parseQualityFromLabel(label: String): Int {
+    private fun parseQualityFromLabel(label: String): Qualities {
         val q = Regex("(\\d{3,4})").find(label)?.groupValues?.get(1)?.toIntOrNull()
-        return q ?: Qualities.Unknown
+        return Qualities.fromInt(q ?: 0)
     }
 }
