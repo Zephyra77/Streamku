@@ -4,9 +4,9 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.getAndUnpack
 import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.getAndUnpack
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
 
 class EfekStream : ExtractorApi() {
@@ -27,7 +27,12 @@ class EfekStream : ExtractorApi() {
         doc.select("script").forEach { script: Element ->
             val data = script.data()
             if (data.contains("eval(function(p,a,c,k,e,d)")) {
-                val unpacked = try { getAndUnpack(data) } catch (e: Exception) { null } ?: return@forEach
+                val unpacked = try {
+                    getAndUnpack(data)
+                } catch (e: Exception) {
+                    null
+                } ?: return@forEach
+
                 val fileRegex = Regex("\"file\"\\s*:\\s*['\"](.*?)['\"]")
                 val labelRegex = Regex("\"label\"\\s*:\\s*['\"](.*?)['\"]")
                 val files = fileRegex.findAll(unpacked).map { it.groupValues[1] }.toList()
@@ -35,15 +40,34 @@ class EfekStream : ExtractorApi() {
 
                 files.forEachIndexed { idx, filePath ->
                     val label = labels.getOrNull(idx) ?: ""
-                    val quality = parseQualityFromLabel(label)
+                    val quality = when (label) {
+                        "1080p" -> Qualities.P1080
+                        "720p" -> Qualities.P720
+                        "360p" -> Qualities.P360
+                        else -> Qualities.Unknown
+                    }
                     val finalUrl = if (filePath.startsWith("http")) filePath else "${mainUrl.trimEnd('/')}$filePath"
-                    links.add(newExtractorLink(name, "$name $label", url = finalUrl) { this.quality = quality })
+
+                    links.add(
+                        newExtractorLink(
+                            name,
+                            "$name $label",
+                            url = finalUrl
+                        ) { this.quality = quality }
+                    )
                 }
 
                 val downloadRegex = Regex("window\\.open\\([\"']([^\"']+)[\"']")
-                downloadRegex.find(unpacked)?.groupValues?.getOrNull(1)?.let { dl ->
+                val downloadMatch = downloadRegex.find(unpacked)
+                downloadMatch?.groupValues?.getOrNull(1)?.let { dl ->
                     val dlFinal = if (dl.startsWith("http")) dl else "${mainUrl.trimEnd('/')}$dl"
-                    links.add(newExtractorLink(name, "$name Download", url = dlFinal) { this.quality = Qualities.Unknown })
+                    links.add(
+                        newExtractorLink(
+                            name,
+                            "$name Download",
+                            url = dlFinal
+                        ) { this.quality = Qualities.Unknown }
+                    )
                 }
             }
         }
@@ -53,19 +77,26 @@ class EfekStream : ExtractorApi() {
             val filePath = m.value
             val finalUrl = "${mainUrl.trimEnd('/')}$filePath"
             val qFromPath = Regex("/stream/(\\d+)/").find(filePath)?.groupValues?.getOrNull(1)?.toIntOrNull()
-            val quality = Qualities.fromInt(qFromPath ?: 0)
-            links.add(newExtractorLink(name, name, url = finalUrl) { this.quality = quality })
+            val quality = when (qFromPath) {
+                1080 -> Qualities.P1080
+                720 -> Qualities.P720
+                360 -> Qualities.P360
+                else -> Qualities.Unknown
+            }
+            links.add(
+                newExtractorLink(
+                    name,
+                    name,
+                    url = finalUrl
+                ) { this.quality = quality }
+            )
         }
 
-        val bestLink = links.find { it.quality >= Qualities.P1080 }
-            ?: links.find { it.quality >= Qualities.P720 }
-            ?: links.find { it.quality >= Qualities.P360 }
+        val bestLink = links.find { it.quality == Qualities.P1080 }
+            ?: links.find { it.quality == Qualities.P720 }
+            ?: links.find { it.quality == Qualities.P360 }
             ?: links.firstOrNull()
-        bestLink?.let { callback(it) }
-    }
 
-    private fun parseQualityFromLabel(label: String): Qualities {
-        val q = Regex("(\\d{3,4})").find(label)?.groupValues?.get(1)?.toIntOrNull()
-        return Qualities.fromInt(q ?: 0)
+        bestLink?.let { callback(it) }
     }
 }
