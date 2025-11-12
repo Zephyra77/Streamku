@@ -3,6 +3,8 @@ package com.filmapik
 import com.lagradost.cloudstream3.ExtractorApi
 import com.lagradost.cloudstream3.Qualities
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.utils.newSubtitleFile
+import org.jsoup.nodes.Document
 
 class EfekStream : ExtractorApi() {
     override val name = "EfekStream"
@@ -12,7 +14,7 @@ class EfekStream : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
+        subtitleCallback: (ExtractorLink) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val html = app.get(url, referer = referer).text
@@ -45,7 +47,7 @@ class ShortIcu : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
+        subtitleCallback: (ExtractorLink) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val res = app.get(url, referer = referer)
@@ -64,7 +66,7 @@ class FileMoon : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
+        subtitleCallback: (ExtractorLink) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val res = app.get(url, referer = referer)
@@ -83,17 +85,18 @@ class Ico3c : ExtractorApi() {
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
+        subtitleCallback: (ExtractorLink) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
         val res = app.get(url, referer = referer)
-        val iframe = res.document.selectFirst("iframe")?.attr("src")
+        val doc = res.document
+        val iframe = doc.selectFirst("iframe")?.attr("src")
         if (!iframe.isNullOrEmpty()) {
             loadExtractor(iframe, referer ?: url, subtitleCallback, callback)
             return
         }
 
-        val script = res.document.select("script").joinToString("\n") { it.data() }
+        val script = doc.select("script").joinToString("\n") { it.data() }
         val redirect = Regex("""window\.location\.href\s*=\s*['"]([^'"]+)['"]""")
             .find(script)?.groupValues?.get(1)
 
