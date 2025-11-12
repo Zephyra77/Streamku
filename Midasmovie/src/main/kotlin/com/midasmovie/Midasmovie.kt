@@ -26,17 +26,18 @@ class MidasMovie : MainAPI() {
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = "$mainUrl${request.data}?page=$page"
+        val url = "$mainUrl${request.data}"
         val doc = app.get(url).document
         val items = doc.select("article.item").mapNotNull { it.toSearchResult() }
-        return newHomePageResponse(request.name, items, hasNext = items.isNotEmpty())
+        return newHomePageResponse(request.name, items)
     }
 
     private fun Element.toSearchResult(): SearchResponse? {
         val a = selectFirst("a[href][title]") ?: return null
         val href = fixUrl(a.attr("href"))
         val title = a.attr("title").trim()
-        val poster = fixUrlNull(selectFirst("img[src]")?.attr("src"))
+        val imgEl = selectFirst("img") ?: return null
+        val poster = fixUrlNull(imgEl.attr("data-src").ifBlank { imgEl.attr("src") })
         val quality = selectFirst(".quality")?.text()
         return newMovieSearchResponse(title, href, TvType.Movie) {
             this.posterUrl = poster
@@ -45,7 +46,7 @@ class MidasMovie : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val url = "$mainUrl/?s=${query.replace(" ", "+")}"
+        val url = "$mainUrl/?s=$query"
         val doc = app.get(url).document
         return doc.select("article.item").mapNotNull { it.toSearchResult() }
     }
@@ -53,7 +54,8 @@ class MidasMovie : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
         val title = doc.selectFirst("h1[itemprop=name], .sheader h1")?.text()?.trim().orEmpty()
-        val poster = fixUrlNull(doc.selectFirst(".poster img")?.attr("src"))
+        val posterEl = doc.selectFirst(".poster img")
+        val poster = fixUrlNull(posterEl?.attr("data-src").ifBlank { posterEl?.attr("src") })
         val description = doc.selectFirst(".wp-content p")?.text()?.trim()
         val genres = doc.select("span.genre a").map { it.text() }
         val actors = doc.select("span.tagline:contains(Stars) a, div.cast a").map { it.text() }
@@ -64,7 +66,8 @@ class MidasMovie : MainAPI() {
             val episodes = doc.select("#seasons .se-c ul.episodios li").map { el ->
                 val epTitle = el.selectFirst(".episodiotitle a")?.text()?.trim().orEmpty()
                 val epLink = fixUrl(el.selectFirst(".episodiotitle a")?.attr("href").orEmpty())
-                val epPoster = fixUrlNull(el.selectFirst("img")?.attr("src"))
+                val epPosterEl = el.selectFirst("img")
+                val epPoster = fixUrlNull(epPosterEl?.attr("data-src").ifBlank { epPosterEl?.attr("src") })
                 val epNum = el.selectFirst(".numerando")?.text()?.split("-")?.lastOrNull()?.trim()?.toIntOrNull()
                 val epDate = el.selectFirst(".episodiotitle span.date")?.text()?.trim()
                 newEpisode(epLink) {
