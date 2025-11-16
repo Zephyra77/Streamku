@@ -133,13 +133,27 @@ open class SoraStream : TmdbProvider() {
     }
 
     private fun Media.toSearchResponse(type: String? = null): SearchResponse? {
-        return newMovieSearchResponse(
-            title ?: name ?: originalTitle ?: return null,
-            Data(id = id, type = mediaType ?: type).toJson(),
-            TvType.Movie,
-        ) {
-            this.posterUrl = getImageUrl(posterPath)
-            this.score = Score.from10(voteAverage)
+        val finalType = getType(mediaType ?: type)
+        val dataJson = Data(id = id, type = mediaType ?: type).toJson()
+
+        return when (finalType) {
+            TvType.TvSeries -> newTvSeriesSearchResponse(
+                title ?: name ?: originalTitle ?: return null,
+                dataJson,
+                TvType.TvSeries
+            ) {
+                this.posterUrl = getImageUrl(posterPath)
+                this.score = Score.from10(voteAverage)
+            }
+
+            else -> newMovieSearchResponse(
+                title ?: name ?: originalTitle ?: return null,
+                dataJson,
+                TvType.Movie
+            ) {
+                this.posterUrl = getImageUrl(posterPath)
+                this.score = Score.from10(voteAverage)
+            }
         }
     }
 
@@ -153,6 +167,11 @@ open class SoraStream : TmdbProvider() {
     }
 
     override suspend fun load(url: String): LoadResponse? {
+        // Reject raw URLs — load expects JSON metadata produced by search
+        if (url.startsWith("http")) {
+            throw ErrorLoadingException("Invalid SoraStream link: expected JSON metadata, got URL")
+        }
+
         val data = parseJson<Data>(url)
         val type = getType(data.type)
         val append = "alternative_titles,credits,external_ids,keywords,videos,recommendations"
@@ -197,7 +216,7 @@ open class SoraStream : TmdbProvider() {
         val trailer = res.videos?.results?.map { "https://www.youtube.com/watch?v=${it.key}" }
 
         return if (type == TvType.TvSeries) {
-            val lastSeason = res.last_episode_to_air?.season_number
+            val lastSeason = res.last_episode_to_air?.season_number ?: res.seasons?.maxOfOrNull { it.seasonNumber ?: 0 }
             val episodes = res.seasons?.mapNotNull { season ->
                 app.get("$tmdbAPI/${data.type}/${data.id}/season/${season.seasonNumber}?api_key=$apiKey")
                     .parsedSafe<MediaDetailEpisodes>()?.episodes?.map { eps ->
@@ -234,7 +253,7 @@ open class SoraStream : TmdbProvider() {
                             this.addDate(eps.airDate)
                         }
                     }
-            }?.flatten() ?: listOf()
+            }?.flatten()?.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 })) ?: listOf()
 
             newTvSeriesLoadResponse(
                 title,
