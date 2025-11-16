@@ -139,7 +139,7 @@ open class SoraStream : TmdbProvider() {
             TvType.Movie,
         ) {
             this.posterUrl = getImageUrl(posterPath)
-            this.score = voteAverage?.times(10)?.roundToInt()
+            this.score = Score.from10(voteAverage)
         }
     }
 
@@ -170,8 +170,9 @@ open class SoraStream : TmdbProvider() {
         val orgTitle = res.originalTitle ?: res.originalName ?: return null
         val releaseDate = res.releaseDate ?: res.firstAirDate
         val year = releaseDate?.split("-")?.first()?.toIntOrNull()
-        val rating = (res.vote_average as? Double)?.times(10)?.roundToInt()
         val genres = res.genres?.mapNotNull { it.name }
+
+        val ratingScore = (res.vote_average as? Double)
 
         val isCartoon = genres?.contains("Animation") ?: false
         val isAnime = isCartoon && (res.original_language == "zh" || res.original_language == "ja")
@@ -227,7 +228,7 @@ open class SoraStream : TmdbProvider() {
                             this.season = eps.seasonNumber
                             this.episode = eps.episodeNumber
                             this.posterUrl = getImageUrl(eps.stillPath)
-                            this.rating = eps.voteAverage?.times(10)?.roundToInt()
+                            this.score = Score.from10(eps.voteAverage)
                             this.description = eps.overview
                         }.apply {
                             this.addDate(eps.airDate)
@@ -246,7 +247,7 @@ open class SoraStream : TmdbProvider() {
                 this.year = year
                 this.plot = res.overview
                 this.tags = keywords.takeIf { !it.isNullOrEmpty() } ?: genres
-                this.rating = rating
+                this.score = Score.from10(ratingScore)
                 this.showStatus = getStatus(res.status)
                 this.recommendations = recommendations
                 this.actors = actors
@@ -282,7 +283,7 @@ open class SoraStream : TmdbProvider() {
                 this.plot = res.overview
                 this.duration = res.runtime
                 this.tags = keywords.takeIf { !it.isNullOrEmpty() } ?: genres
-                this.rating = rating
+                this.score = Score.from10(ratingScore)
                 this.recommendations = recommendations
                 this.actors = actors
                 this.contentRating = fetchContentRating(data.id, "US")
