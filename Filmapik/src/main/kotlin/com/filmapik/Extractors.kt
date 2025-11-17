@@ -22,7 +22,6 @@ class EfekStream : ExtractorApi() {
     ) {
         val res = app.get(url, referer = referer)
         val doc = res.document
-
         val links = mutableListOf<ExtractorLink>()
 
         doc.select("script").forEach { script: Element ->
@@ -50,7 +49,14 @@ class EfekStream : ExtractorApi() {
                             name,
                             "$name $label",
                             url = finalUrl
-                        ) { this.quality = quality }
+                        ) {
+                            this.quality = quality
+                            this.isM3u8 = true
+                            this.headers = mapOf(
+                                "User-Agent" to "Mozilla/5.0",
+                                "Referer" to mainUrl
+                            )
+                        }
                     )
                 }
 
@@ -63,7 +69,10 @@ class EfekStream : ExtractorApi() {
                             name,
                             "$name Download",
                             url = dlFinal
-                        ) { this.quality = Qualities.Unknown.value }
+                        ) {
+                            this.quality = Qualities.Unknown.value
+                            this.isM3u8 = false
+                        }
                     )
                 }
             }
@@ -84,18 +93,20 @@ class EfekStream : ExtractorApi() {
             links.add(
                 newExtractorLink(
                     name,
-                    name,
+                    "$name ${qFromPath ?: "Unknown"}p",
                     url = finalUrl
-                ) { this.quality = quality }
+                ) {
+                    this.quality = quality
+                    this.isM3u8 = true
+                    this.headers = mapOf(
+                        "User-Agent" to "Mozilla/5.0",
+                        "Referer" to mainUrl
+                    )
+                }
             )
         }
 
-        val bestLink = links.find { it.quality == Qualities.P1080.value }
-            ?: links.find { it.quality == Qualities.P720.value }
-            ?: links.find { it.quality == Qualities.P360.value }
-            ?: links.firstOrNull()
-
-        bestLink?.let { callback(it) }
+        links.forEach { callback(it) }
     }
 
     private fun parseQualityFromLabel(label: String): Int {
