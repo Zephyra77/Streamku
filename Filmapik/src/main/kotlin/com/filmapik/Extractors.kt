@@ -11,37 +11,25 @@ class EfekStream : ExtractorApi() {
     override val mainUrl = "https://v2.efek.stream"
     override val requiresReferer = true
 
-    override suspend fun getUrl(
-        url: String,
-        referer: String?,
-        subtitleCallback: (Any) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val doc = fetch(url, referer = mainUrl).document
+    override suspend fun getUrl(url: String, referer: String?): List<ExtractorLink>? {
+        val doc = app.get(url, referer = mainUrl).document
         val script = doc.select("script:contains(sources)").html()
-
-        val json = Regex("""sources\s*:\s*(\[[^\]]+])""")
-            .find(script)?.groupValues?.get(1)
-            ?: return
-
+        val json = Regex("""sources\s*:\s*(\[[^\]]+])""").find(script)?.groupValues?.get(1) ?: return null
         val arr = JSONObject("{\"sources\":$json}").getJSONArray("sources")
 
+        val links = mutableListOf<ExtractorLink>()
         for (i in 0 until arr.length()) {
             val file = arr.getJSONObject(i).getString("file")
-
             val quality = when {
                 file.contains("1080") -> Qualities.P1080.value
                 file.contains("720") -> Qualities.P720.value
                 file.contains("480") -> Qualities.P480.value
                 else -> Qualities.Unknown.value
             }
-
-            callback(
+            links.add(
                 newExtractorLink(
                     name = name,
-                    text = "$name - ${quality}p",
                     url = file,
-                    referer = url,
                     quality = quality,
                     isM3u8 = file.endsWith(".m3u8"),
                     headers = mapOf(
@@ -52,5 +40,6 @@ class EfekStream : ExtractorApi() {
                 )
             )
         }
+        return links
     }
 }
