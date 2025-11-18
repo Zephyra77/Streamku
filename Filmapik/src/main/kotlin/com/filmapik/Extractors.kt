@@ -3,21 +3,21 @@ package com.filmapik
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.SubtitleFile
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
 
 class EfekStream : ExtractorApi() {
-    override val name: String = "EfekStream"
-    override val mainUrl: String = "https://v2.efek.stream"
-    override val requiresReferer: Boolean = true
+    override val name = "EfekStream"
+    override val mainUrl = "https://v2.efek.stream"
+    override val requiresReferer = true
 
     override suspend fun getUrl(
         url: String,
         referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
+        subtitleCallback: (Any) -> Unit,
         callback: (ExtractorLink) -> Unit
     ) {
-        val doc = app.get(url, referer = mainUrl).document
+        val doc = fetch(url, referer = mainUrl).document
         val script = doc.select("script:contains(sources)").html()
 
         val json = Regex("""sources\s*:\s*(\[[^\]]+])""")
@@ -37,7 +37,7 @@ class EfekStream : ExtractorApi() {
             }
 
             callback(
-                ExtractorLink(
+                newExtractorLink(
                     name = name,
                     text = "$name - ${quality}p",
                     url = file,
