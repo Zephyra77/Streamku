@@ -1,13 +1,15 @@
 package com.filmapik
 
-import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.extractors.ExtractorApi
+import com.lagradost.cloudstream3.utils.ExtractorApi
+import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.Qualities
+import com.lagradost.cloudstream3.utils.SubtitleFile
 import org.json.JSONObject
 
 class EfekStream : ExtractorApi() {
-    override val name = "EfekStream"
-    override val mainUrl = "https://v2.efek.stream"
-    override val requiresReferer = true
+    override val name: String = "EfekStream"
+    override val mainUrl: String = "https://v2.efek.stream"
+    override val requiresReferer: Boolean = true
 
     override suspend fun getUrl(
         url: String,
@@ -36,11 +38,11 @@ class EfekStream : ExtractorApi() {
 
             callback(
                 ExtractorLink(
-                    name,
-                    "$name - ${quality}p",
-                    file,
-                    url,
-                    quality,
+                    name = name,
+                    text = "$name - ${quality}p",
+                    url = file,
+                    referer = url,
+                    quality = quality,
                     isM3u8 = file.endsWith(".m3u8"),
                     headers = mapOf(
                         "Referer" to mainUrl,
