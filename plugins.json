@@ -22,6 +22,26 @@
         "name": "Anichin"
     },
     {
+        "iconUrl": "https://aghanim.xyz/wp-content/themes/animesail/assets/images/ico.png",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/Zephyra77/Streamku",
+        "fileSize": 16833,
+        "status": 1,
+        "language": "id",
+        "authors": [
+            "Hexated"
+        ],
+        "tvTypes": [
+            "AnimeMovie",
+            "Anime",
+            "OVA"
+        ],
+        "version": 11,
+        "internalName": "AnimeSailProvider",
+        "url": "https://raw.githubusercontent.com/Zephyra77/Streamku/builds/AnimeSailProvider.cs3",
+        "name": "AnimeSailProvider"
+    },
+    {
         "iconUrl": "https://www.google.com/s2/favicons?domain=auratail.vip&sz=%size%",
         "apiVersion": 1,
         "repositoryUrl": "https://github.com/Zephyra77/Streamku",
